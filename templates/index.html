@@ -6,7 +6,7 @@
   <title>TaskFlow AI</title>
   <script>
     (function() {
-      const savedTheme = localStorage.getItem('theme') || 'dark';
+      const savedTheme = localStorage.getItem('theme') || 'light';
       document.documentElement.setAttribute('data-theme', savedTheme);
     })();
   </script>
@@ -341,53 +341,61 @@
     .edge-trigger {
       position: fixed;
       top: 50%;
-      transform: translateY(-50%);
+      transform: translateY(-50%) scale(1);
       z-index: 1000;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 10px;
       cursor: pointer;
-      width: 20px;
-      padding: 16px 4px;
-      border-radius: 0 10px 10px 0;
+      width: 42px;
+      height: 120px;
       border: none;
       outline: none;
       font-family: 'Inter', sans-serif;
-      transition: width 0.3s cubic-bezier(0.34,1.56,0.64,1), background 0.3s, box-shadow 0.3s;
+      transition: transform 0.45s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease, background 0.3s, box-shadow 0.3s;
     }
     .edge-trigger.left {
       left: 0;
-      background: linear-gradient(180deg, rgba(0,212,170,0.18) 0%, rgba(0,212,170,0.08) 100%);
+      background: #0c0d12;
+      border: 2px solid rgba(0, 212, 170, 0.4);
       border-left: none;
-      box-shadow: 2px 0 20px rgba(0,212,170,0.15), inset -1px 0 0 rgba(0,212,170,0.2);
-      border: 1px solid rgba(0,212,170,0.25);
-      border-left: none;
+      border-radius: 0 14px 14px 0;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.5), inset -1px 0 0 rgba(0,212,170,0.2);
     }
     .edge-trigger.right {
       right: 0;
-      background: linear-gradient(180deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.08) 100%);
+      background: #0c0d12;
+      border: 2px solid rgba(139, 92, 246, 0.4);
       border-right: none;
-      border-radius: 10px 0 0 10px;
-      box-shadow: -2px 0 20px rgba(139,92,246,0.15), inset 1px 0 0 rgba(139,92,246,0.2);
-      border: 1px solid rgba(139,92,246,0.25);
-      border-right: none;
+      border-radius: 14px 0 0 14px;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.5), inset 1px 0 0 rgba(139,92,246,0.2);
     }
     .edge-trigger:hover {
-      width: 28px;
+      background: #11121a;
     }
     .edge-trigger.left:hover {
-      background: linear-gradient(180deg, rgba(0,212,170,0.28) 0%, rgba(0,212,170,0.15) 100%);
-      box-shadow: 4px 0 28px rgba(0,212,170,0.3);
+      box-shadow: 6px 0 25px rgba(0, 212, 170, 0.45);
     }
     .edge-trigger.right:hover {
-      background: linear-gradient(180deg, rgba(139,92,246,0.28) 0%, rgba(139,92,246,0.15) 100%);
-      box-shadow: -4px 0 28px rgba(139,92,246,0.3);
+      box-shadow: -6px 0 25px rgba(139, 92, 246, 0.45);
+    }
+    .edge-trigger.left.active {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%) scale(0.1);
+      transform-origin: left center;
+    }
+    .edge-trigger.right.active {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%) scale(0.1);
+      transform-origin: right center;
     }
     .edge-trigger .trigger-icon {
       writing-mode: vertical-rl;
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 700;
       letter-spacing: 2px;
       text-transform: uppercase;
@@ -400,8 +408,8 @@
       transform: rotate(180deg);
     }
     .trigger-dot {
-      width: 5px;
-      height: 5px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: var(--teal);
       animation: pulseDot 2s ease-in-out infinite;
@@ -419,32 +427,35 @@
     .edge-panel {
       position: fixed;
       top: 50%;
-      transform: translateY(-50%) translateX(0);
       z-index: 999;
-      width: 320px;
-      max-height: 88vh;
+      width: 42px;
+      height: 120px;
       display: flex;
       flex-direction: column;
-      /* overflow MUST be visible so the side rail can protrude outside the panel */
       overflow: visible;
-      transition: transform 0.45s cubic-bezier(0.34,1.2,0.64,1), opacity 0.35s ease;
       pointer-events: none;
       opacity: 0;
+      transition: width 0.45s cubic-bezier(0.34, 1.2, 0.64, 1),
+                  height 0.45s cubic-bezier(0.34, 1.2, 0.64, 1),
+                  transform 0.45s cubic-bezier(0.34, 1.2, 0.64, 1),
+                  opacity 0.3s ease;
     }
     .edge-panel.left-panel {
       left: 0;
-      transform: translateY(-50%) translateX(-105%);
+      transform: translateY(-50%) translateX(0);
+      transform-origin: left center;
     }
     .edge-panel.right-panel {
       right: 0;
-      transform: translateY(-50%) translateX(105%);
+      transform: translateY(-50%) translateX(0);
+      transform-origin: right center;
     }
     .edge-panel.open {
-      transform: translateY(-50%) translateX(0);
+      width: 320px;
+      height: 88vh;
       opacity: 1;
       pointer-events: all;
     }
-    /* shift panel past the trigger button */
     .edge-panel.left-panel.open  { transform: translateY(-50%) translateX(20px); }
     .edge-panel.right-panel.open { transform: translateY(-50%) translateX(-20px); }
 
@@ -454,21 +465,51 @@
       flex-direction: column;
       flex: 1;
       overflow: hidden;
-      max-height: 88vh;
+      height: 100%;
+      transition: border-radius 0.45s cubic-bezier(0.34, 1.2, 0.64, 1);
     }
     .left-panel .panel-clip {
-      border-radius: 0 16px 16px 0;
+      border-radius: 0 14px 14px 0;
       background: linear-gradient(160deg, #0d1a17 0%, #0a1512 60%, #080d0c 100%);
-      border: 1px solid rgba(0,212,170,0.2);
+      border: 2px solid rgba(0,212,170,0.3);
       border-left: none;
       box-shadow: 8px 0 60px rgba(0,212,170,0.12), 0 0 0 1px rgba(0,212,170,0.08);
     }
+    .left-panel.open .panel-clip {
+      border-radius: 0 16px 16px 0;
+    }
     .right-panel .panel-clip {
-      border-radius: 16px 0 0 16px;
+      border-radius: 14px 0 0 14px;
       background: linear-gradient(160deg, #0e0d1a 0%, #0b0a14 60%, #08080e 100%);
-      border: 1px solid rgba(139,92,246,0.2);
+      border: 2px solid rgba(139,92,246,0.3);
       border-right: none;
       box-shadow: -8px 0 60px rgba(139,92,246,0.12), 0 0 0 1px rgba(139,92,246,0.08);
+    }
+    .right-panel.open .panel-clip {
+      border-radius: 16px 0 0 16px;
+    }
+
+    /* Hide contents until panel expands */
+    .panel-clip > * {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .edge-panel.open .panel-clip > * {
+      opacity: 1;
+      visibility: visible;
+      transition-delay: 0.15s;
+    }
+
+    .panel-side-rail {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    .edge-panel.open .panel-side-rail {
+      opacity: 1;
+      visibility: visible;
+      transition-delay: 0.2s;
     }
 
     /* ── Panel header ── */
@@ -1497,7 +1538,7 @@
   const toggleBtn = document.getElementById('theme-toggle');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', () => {
-      const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
       const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', newTheme);
       localStorage.setItem('theme', newTheme);
@@ -1527,10 +1568,14 @@
     function openPanel() {
       clearTimeout(closeTimer);
       panel.classList.add('open');
+      trigger.classList.add('active');
     }
     function scheduleClose() {
       if (pinned) return;   // ignore hover-out when pinned
-      closeTimer = setTimeout(() => panel.classList.remove('open'), 280);
+      closeTimer = setTimeout(() => {
+        panel.classList.remove('open');
+        trigger.classList.remove('active');
+      }, 280);
     }
 
     trigger.addEventListener('mouseenter', openPanel);
@@ -1540,7 +1585,10 @@
 
     // Touch: tap trigger to toggle (only when not pinned)
     trigger.addEventListener('click', () => {
-      if (!pinned) panel.classList.toggle('open');
+      if (!pinned) {
+        const isOpen = panel.classList.toggle('open');
+        trigger.classList.toggle('active', isOpen);
+      }
     });
 
     // Public API stored in registry
@@ -1549,7 +1597,7 @@
       pin() {
         pinned = true;
         panel.classList.add('open', 'pinned');
-        trigger.classList.add('panel-pinned');
+        trigger.classList.add('panel-pinned', 'active');
         // Mark the rail pin button active
         const pinBtn = panel.querySelector('.rail-pin');
         if (pinBtn) pinBtn.classList.add('pinned');
@@ -1558,7 +1606,7 @@
       unpin() {
         pinned = false;
         panel.classList.remove('pinned', 'open');
-        trigger.classList.remove('panel-pinned');
+        trigger.classList.remove('panel-pinned', 'active');
         const pinBtn = panel.querySelector('.rail-pin');
         if (pinBtn) pinBtn.classList.remove('pinned');
         if (pinBtn) pinBtn.setAttribute('title', 'Pin panel');
