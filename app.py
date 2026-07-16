@@ -124,7 +124,7 @@ You have a HIGH priority task due in 2 days ({task.due_date}):
 
 Make sure you complete it on time!
 
-Open TaskFlow: <TASKFLOW_AI_RENDER_URL>
+Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
 
 — TaskFlow
 """
@@ -140,7 +140,7 @@ Urgent reminder — your HIGH priority task is due TOMORROW ({task.due_date}):
 
 Don't leave it for the last minute!
 
-Open TaskFlow: <TASKFLOW_AI_RENDER_URL>
+Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
 
 — TaskFlow
 """
@@ -156,7 +156,7 @@ Your HIGH priority task is due TODAY ({task.due_date}):
 
 Complete it as soon as possible!
 
-Open TaskFlow: <TASKFLOW_AI_RENDER_URL>
+Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
 
 — TaskFlow
 """
@@ -215,7 +215,7 @@ The following HIGH priority task{'s are' if len(tasks) > 1 else ' is'} due TOMOR
 
 Make sure you complete {'them' if len(tasks) > 1 else 'it'} today!
 
-Open TaskFlow: <TASKFLOW_AI_RENDER_URL>
+Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
 
 — TaskFlow
 """
