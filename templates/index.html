@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TaskFlow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:    #080808;
+      --s1:    #111;
+      --s2:    #181818;
+      --s3:    #202020;
+      --b1:    rgba(255,255,255,0.06);
+      --b2:    rgba(255,255,255,0.11);
+      --b3:    rgba(255,255,255,0.18);
+      --text:  #f0f0f0;
+      --muted: #444;
+      --muted2:#777;
+      --teal:  #00d4aa;
+      --teal2: #00ffcc;
+      --tdim:  rgba(0,212,170,0.08);
+      --tdim2: rgba(0,212,170,0.14);
+      --high:  #ff4d6d;
+      --med:   #ffb347;
+      --low:   #00d4aa;
+      --r:     12px;
+      --r2:    8px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 16px 60px;
+    }
+
+    .wrap { max-width: 660px; margin: 0 auto; }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 36px;
+      animation: fadeDown 0.4s ease both;
+    }
+    .logo { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.5px; }
+    .logo em { color: var(--teal); font-style: normal; }
+    .logo small { display: block; font-size: 10px; font-weight: 400; color: var(--muted2); letter-spacing: 0.5px; margin-top: 1px; }
+
+    .user-pill {
+      display: flex; align-items: center; gap: 8px;
+      border: 1px solid var(--b2); border-radius: 99px;
+      padding: 5px 14px 5px 5px; transition: border-color 0.2s;
+      text-decoration: none;
+    }
+    .user-pill:hover { border-color: var(--b3); }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 1.5px solid var(--teal);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: var(--teal);
+    }
+    .user-pill .uname { font-size: 13px; font-weight: 500; color: var(--text); }
+    .user-pill .usignout { font-size: 11px; color: var(--muted2); margin-left: 2px; }
+    .user-pill:hover .usignout { color: var(--high); }
+
+    /* ── PROGRESS ── */
+    .prog-wrap { margin-bottom: 22px; animation: fadeUp 0.4s 0.05s ease both; }
+    .prog-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+    .prog-label { font-size: 9px; color: var(--muted2); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+    .prog-val { font-size: 11px; color: var(--teal); font-weight: 600; transition: all 0.3s; }
+    .prog-track { height: 2px; background: var(--s3); border-radius: 99px; overflow: hidden; }
+    .prog-fill {
+      height: 100%; background: var(--teal); border-radius: 99px;
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ── STATS ── */
+    .stats {
+      display: grid; grid-template-columns: repeat(3,1fr);
+      gap: 8px; margin-bottom: 22px;
+      animation: fadeUp 0.4s 0.1s ease both;
+    }
+    .stat {
+      background: var(--s1); border: 1px solid var(--b1);
+      border-radius: var(--r2); padding: 16px 12px; text-align: center;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .stat:hover { border-color: var(--b2); transform: translateY(-1px); }
+    .stat .n {
+      font-size: 2rem; font-weight: 700; color: var(--teal);
+      line-height: 1; font-variant-numeric: tabular-nums;
+      transition: all 0.3s;
+    }
+    .stat .l { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
+
+    /* ── FORM ── */
+    .form-wrap {
+      background: var(--s1); border: 1px solid var(--b1);
+      border-radius: var(--r); padding: 20px;
+      margin-bottom: 24px; transition: border-color 0.2s;
+      animation: fadeUp 0.4s 0.15s ease both;
+    }
+    .form-wrap:focus-within { border-color: var(--tdim2); }
+    .flabel { font-size: 9px; color: var(--muted2); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 12px; display: block; }
+
+    .frow { display: flex; gap: 7px; flex-wrap: wrap; }
+
+    input[type="text"], input[type="date"], select {
+      background: var(--s2); border: 1px solid var(--b1);
+      border-radius: var(--r2); color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 13px;
+      padding: 9px 12px; outline: none; transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, input[type="date"]:focus, select:focus { border-color: var(--teal); }
+    input[type="text"]::placeholder { color: var(--muted); }
+    input[type="text"] { flex: 1; min-width: 160px; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.4); cursor: pointer; }
+    select option { background: var(--s2); }
+
+    .btn-add {
+      background: var(--teal); color: #080808; border: none;
+      border-radius: var(--r2); font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 700; padding: 9px 18px;
+      cursor: pointer; letter-spacing: 0.3px;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn-add:hover { background: var(--teal2); }
+    .btn-add:active { transform: scale(0.97); }
+
+    .priority-hint {
+      display: none; align-items: center; gap: 5px;
+      font-size: 10px; color: var(--teal); margin-top: 9px;
+      opacity: 0.85;
+      animation: fadeIn 0.2s ease both;
+    }
+    .priority-hint.show { display: flex; }
+
+    /* ── SECTION HEADER ── */
+    .sec-hdr {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 11px;
+      animation: fadeUp 0.4s 0.2s ease both;
+    }
+    .sec-title { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+    .filters { display: flex; gap: 5px; }
+    .chip {
+      font-size: 10px; padding: 3px 11px; border-radius: 99px;
+      border: 1px solid var(--b1); color: var(--muted2); cursor: pointer;
+      transition: all 0.15s; background: transparent;
+    }
+    .chip:hover { border-color: var(--b2); color: var(--text); }
+    .chip.active { border-color: var(--teal); color: var(--teal); background: var(--tdim); }
+
+    /* ── TASK LIST ── */
+    .task-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .task-card {
+      background: var(--s1); border: 1px solid var(--b1);
+      border-radius: var(--r2); padding: 13px 13px 13px 16px;
+      display: flex; align-items: flex-start; gap: 11px;
+      position: relative; overflow: hidden;
+      transition: border-color 0.2s, background 0.2s, opacity 0.3s, transform 0.3s, max-height 0.35s;
+      animation: slideIn 0.3s ease both;
+    }
+    .task-card:hover { border-color: var(--b2); background: var(--s2); }
+    .task-card::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+    }
+    .task-card.priority-high::before   { background: var(--high); }
+    .task-card.priority-medium::before { background: var(--med); }
+    .task-card.priority-low::before    { background: var(--teal); }
+
+    .task-card.completed { opacity: 0.35; }
+    .task-card.completed .task-content { text-decoration: line-through; }
+
+    /* Overdue highlight */
+    .task-card.overdue:not(.completed) { border-color: rgba(255,77,109,0.2); }
+    .task-card.overdue:not(.completed)::after {
+      content: 'OVERDUE';
+      position: absolute; right: 42px; top: 13px;
+      font-size: 8px; font-weight: 700; letter-spacing: 0.8px;
+      color: var(--high); opacity: 0.7;
+    }
+
+    /* removing animation */
+    .task-card.removing {
+      opacity: 0 !important;
+      transform: translateX(20px);
+      max-height: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+    }
+
+    /* ── COMPLETE BUTTON ── */
+    .complete-btn {
+      width: 20px; height: 20px; min-width: 20px;
+      border-radius: 50%; border: 1px solid var(--b3);
+      background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s; margin-top: 2px;
+    }
+    .complete-btn:hover { border-color: var(--teal); box-shadow: 0 0 0 3px var(--tdim); }
+    .task-card.completed .complete-btn { background: var(--teal); border-color: var(--teal); }
+    .complete-btn svg { display: none; }
+    .task-card.completed .complete-btn svg { display: block; }
+
+    /* ── TASK BODY ── */
+    .task-body { flex: 1; min-width: 0; }
+    .task-content { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.4; word-break: break-word; }
+    .task-meta { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+
+    .badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 99px; }
+    .badge-high   { background: rgba(255,77,109,0.1); color: var(--high); }
+    .badge-medium { background: rgba(255,179,71,0.1); color: var(--med); }
+    .badge-low    { background: rgba(0,212,170,0.1); color: var(--teal); }
+
+    .due-label { font-size: 10px; color: var(--muted2); }
+    .due-label.urgent { color: var(--high); font-weight: 600; }
+    .due-label.soon   { color: var(--med); font-weight: 600; }
+
+    /* ── DELETE ── */
+    .delete-btn {
+      background: transparent; border: none; color: var(--muted);
+      cursor: pointer; padding: 3px; border-radius: 5px;
+      display: flex; align-items: center; margin-top: 1px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .delete-btn:hover { color: var(--high); background: rgba(255,77,109,0.08); }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center; padding: 48px 20px; color: var(--muted2);
+      animation: fadeIn 0.3s ease both;
+    }
+    .empty-icon {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 1px solid var(--b2);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 14px; font-size: 20px;
+    }
+    .empty-state p { font-size: 13px; }
+
+    /* ── CELEBRATION ── */
+    .celebration {
+      text-align: center; padding: 20px;
+      font-size: 12px; color: var(--teal);
+      display: none; animation: fadeIn 0.4s ease both;
+    }
+    .celebration.show { display: block; }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+    @keyframes fadeUp   { from { opacity: 0; transform: translateY(8px);  } to { opacity: 1; transform: none; } }
+    @keyframes fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideIn  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 500px) {
+      .frow { flex-direction: column; }
+      .btn-add { width: 100%; }
+      .stats { gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      Task<em>Flow</em>
+      <small>personal productivity</small>
+    </div>
+    <a class="user-pill" href="/logout" title="Sign out">
+      <div class="avatar">{{ current_user.username[0].upper() }}</div>
+      <span class="uname">{{ current_user.username }}</span>
+      <span class="usignout">· sign out</span>
+    </a>
+  </header>
+
+  <!-- Progress bar -->
+  {% set total    = tasks | length %}
+  {% set done     = tasks | selectattr('completed') | list | length %}
+  {% set pending  = total - done %}
+  {% set pct      = ((done / total * 100) | int) if total > 0 else 0 %}
+
+  <div class="prog-wrap">
+    <div class="prog-top">
+      <span class="prog-label">Progress</span>
+      <span class="prog-val" id="prog-val">{{ done }} of {{ total }} complete</span>
+    </div>
+    <div class="prog-track">
+      <div class="prog-fill" id="prog-fill" style="width: {{ pct }}%"></div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="n" id="stat-total">{{ total }}</div><div class="l">Total</div></div>
+    <div class="stat"><div class="n" id="stat-pending">{{ pending }}</div><div class="l">Pending</div></div>
+    <div class="stat"><div class="n" id="stat-done">{{ done }}</div><div class="l">Done</div></div>
+  </div>
+
+  <!-- Add task form -->
+  <div class="form-wrap">
+    <span class="flabel">New task</span>
+    <form action="/add" method="POST">
+      <div class="frow">
+        <input type="text" name="content" placeholder="What needs to be done?" autocomplete="off" required />
+        <select name="priority" id="priority-select">
+          <option value="high">🔴 High</option>
+          <option value="medium" selected>🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+        <input type="date" name="due_date" />
+        <button type="submit" class="btn-add">+ Add</button>
+      </div>
+      <div class="priority-hint" id="priority-hint">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        You'll be emailed if due in 2 days or less
+      </div>
+    </form>
+  </div>
+
+  <!-- Section header + filters -->
+  <div class="sec-hdr">
+    <span class="sec-title" id="sec-count">{{ total }} task{{ 's' if total != 1 }}</span>
+    <div class="filters">
+      <button class="chip active" onclick="filterTasks(this,'all')">All</button>
+      <button class="chip" onclick="filterTasks(this,'pending')">Pending</button>
+      <button class="chip" onclick="filterTasks(this,'done')">Done</button>
+    </div>
+  </div>
+
+  <!-- Celebration -->
+  <div class="celebration" id="celebration">
+    ✦ All tasks complete — great work!
+  </div>
+
+  <!-- Task list -->
+  {% if tasks %}
+  <div class="task-list" id="task-list">
+    {% for task in tasks %}
+    <div class="task-card priority-{{ task.priority }} {% if task.completed %}completed{% endif %} {% if task.due_date and not task.completed %}{% set parts = task.due_date.split('-') %}{% endif %}"
+         data-state="{{ 'done' if task.completed else 'pending' }}"
+         data-due="{{ task.due_date or '' }}"
+         id="card-{{ task.id }}"
+         style="animation-delay: {{ loop.index0 * 0.04 }}s">
+
+      <!-- Complete toggle -->
+      <a href="/complete/{{ task.id }}" class="complete-btn-link">
+        <button class="complete-btn" title="Toggle complete" type="button" onclick="handleComplete(event, {{ task.id }})">
+          <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6L5 9L10 3" stroke="#080808" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </a>
+
+      <!-- Task info -->
+      <div class="task-body">
+        <div class="task-content">{{ task.content }}</div>
+        <div class="task-meta">
+          <span class="badge badge-{{ task.priority }}">{{ task.priority }}</span>
+          {% if task.due_date %}
+            <span class="due-label" data-due="{{ task.due_date }}">📅 {{ task.due_date }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Delete -->
+      <button class="delete-btn" title="Delete" type="button" onclick="handleDelete(event, {{ task.id }})">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14H6L5 6"></path>
+          <path d="M10 11v6M14 11v6"></path>
+          <path d="M9 6V4h6v2"></path>
+        </svg>
+      </button>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">✓</div>
+    <p>No tasks yet — add one above to get started</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+  // ── Priority hint ──────────────────────────────────────────
+  const psel  = document.getElementById('priority-select');
+  const phint = document.getElementById('priority-hint');
+  if (psel) {
+    psel.addEventListener('change', () => {
+      phint.classList.toggle('show', psel.value === 'high');
+    });
+  }
+
+  // ── Smart due date labels ──────────────────────────────────
+  function formatDue(dateStr, isCompleted) {
+    if (!dateStr) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const due   = new Date(dateStr + 'T00:00:00');
+    const diff  = Math.round((due - today) / 86400000);
+    if (isCompleted) return { text: '📅 ' + dateStr, cls: '' };
+    if (diff < 0)  return { text: '⚠️ Overdue by ' + Math.abs(diff) + 'd', cls: 'urgent' };
+    if (diff === 0) return { text: '🔴 Due today', cls: 'urgent' };
+    if (diff === 1) return { text: '🟠 Due tomorrow', cls: 'soon' };
+    if (diff === 2) return { text: '🟡 Due in 2 days', cls: 'soon' };
+    return { text: '📅 ' + dateStr, cls: '' };
+  }
+
+  function refreshDueLabels() {
+    document.querySelectorAll('.due-label[data-due]').forEach(el => {
+      const card = el.closest('.task-card');
+      const isCompleted = card && card.classList.contains('completed');
+      const result = formatDue(el.dataset.due, isCompleted);
+      if (result) {
+        el.textContent = result.text;
+        el.className = 'due-label ' + result.cls;
+      }
+    });
+    // Mark overdue cards
+    document.querySelectorAll('.task-card:not(.completed)').forEach(card => {
+      const due = card.dataset.due;
+      if (!due) return;
+      const today = new Date(); today.setHours(0,0,0,0);
+      const dueD  = new Date(due + 'T00:00:00');
+      card.classList.toggle('overdue', dueD < today);
+    });
+  }
+  refreshDueLabels();
+
+  // ── Filter chips ──────────────────────────────────────────
+  function filterTasks(el, filter) {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    let visible = 0;
+    document.querySelectorAll('.task-card').forEach(card => {
+      const state = card.dataset.state;
+      const show  = filter === 'all' || state === filter;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    const label = document.getElementById('sec-count');
+    if (label) label.textContent = visible + ' task' + (visible !== 1 ? 's' : '');
+  }
+
+  // ── Handle complete (optimistic UI) ──────────────────────
+  function handleComplete(e, id) {
+    e.preventDefault();
+    const card = document.getElementById('card-' + id);
+    if (!card) return;
+    const isDone = card.classList.contains('completed');
+    card.classList.toggle('completed');
+    card.dataset.state = isDone ? 'pending' : 'done';
+    refreshDueLabels();
+    updateStats();
+    checkCelebration();
+    fetch('/complete/' + id);
+  }
+
+  // ── Handle delete (animated removal) ─────────────────────
+  function handleDelete(e, id) {
+    e.preventDefault();
+    const card = document.getElementById('card-' + id);
+    if (!card) return;
+    card.classList.add('removing');
+    setTimeout(() => {
+      card.remove();
+      updateStats();
+      checkCelebration();
+    }, 300);
+    fetch('/delete/' + id);
+  }
+
+  // ── Live stats update ─────────────────────────────────────
+  function updateStats() {
+    const all     = document.querySelectorAll('.task-card');
+    const done    = document.querySelectorAll('.task-card.completed');
+    const total   = all.length;
+    const doneN   = done.length;
+    const pending = total - doneN;
+    const pct     = total > 0 ? Math.round(doneN / total * 100) : 0;
+
+    animateNum('stat-total',   total);
+    animateNum('stat-pending', pending);
+    animateNum('stat-done',    doneN);
+
+    const fill = document.getElementById('prog-fill');
+    if (fill) fill.style.width = pct + '%';
+    const val = document.getElementById('prog-val');
+    if (val) val.textContent = doneN + ' of ' + total + ' complete';
+
+    const label = document.getElementById('sec-count');
+    if (label) label.textContent = total + ' task' + (total !== 1 ? 's' : '');
+  }
+
+  function animateNum(id, target) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const start = parseInt(el.textContent) || 0;
+    if (start === target) return;
+    const step = target > start ? 1 : -1;
+    let cur = start;
+    const t = setInterval(() => {
+      cur += step;
+      el.textContent = cur;
+      if (cur === target) clearInterval(t);
+    }, 40);
+  }
+
+  // ── Celebration when all done ─────────────────────────────
+  function checkCelebration() {
+    const all  = document.querySelectorAll('.task-card');
+    const done = document.querySelectorAll('.task-card.completed');
+    const cel  = document.getElementById('celebration');
+    if (!cel) return;
+    cel.classList.toggle('show', all.length > 0 && all.length === done.length);
+  }
+  checkCelebration();
+</script>
+</body>
+</html>
