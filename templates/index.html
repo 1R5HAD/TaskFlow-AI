@@ -350,7 +350,7 @@
       gap: 10px;
       cursor: pointer;
       width: 42px;
-      height: 120px;
+      height: 84px;
       border: none;
       outline: none;
       font-family: 'Inter', sans-serif;
@@ -358,39 +358,35 @@
     }
     .edge-trigger.left {
       left: 0;
-      background: #0c0d12;
-      border: 2px solid rgba(0, 212, 170, 0.4);
-      border-left: none;
+      background: #00d4aa;
       border-radius: 0 14px 14px 0;
-      box-shadow: 4px 0 20px rgba(0,0,0,0.5), inset -1px 0 0 rgba(0,212,170,0.2);
+      box-shadow: 4px 0 24px rgba(0,212,170,0.45);
     }
     .edge-trigger.right {
       right: 0;
-      background: #0c0d12;
-      border: 2px solid rgba(139, 92, 246, 0.4);
-      border-right: none;
+      background: #8b5cf6;
       border-radius: 14px 0 0 14px;
-      box-shadow: -4px 0 20px rgba(0,0,0,0.5), inset 1px 0 0 rgba(139,92,246,0.2);
-    }
-    .edge-trigger:hover {
-      background: #11121a;
+      box-shadow: -4px 0 24px rgba(139,92,246,0.45);
     }
     .edge-trigger.left:hover {
-      box-shadow: 6px 0 25px rgba(0, 212, 170, 0.45);
+      background: #00bfaa;
+      box-shadow: 6px 0 30px rgba(0,212,170,0.6);
     }
     .edge-trigger.right:hover {
-      box-shadow: -6px 0 25px rgba(139, 92, 246, 0.45);
+      background: #7c3aed;
+      box-shadow: -6px 0 30px rgba(139,92,246,0.6);
     }
     .edge-trigger.left.active {
       opacity: 0;
-      pointer-events: none;
-      transform: translateY(-50%) scale(0.1);
+      /* NOTE: pointer-events intentionally kept ON.
+         Setting pointer-events:none here causes a synthetic mouseleave
+         the moment the panel opens, which re-triggers open↔close flicker. */
+      transform: translateY(-50%) scale(0.85);
       transform-origin: left center;
     }
     .edge-trigger.right.active {
       opacity: 0;
-      pointer-events: none;
-      transform: translateY(-50%) scale(0.1);
+      transform: translateY(-50%) scale(0.85);
       transform-origin: right center;
     }
     .edge-trigger .trigger-icon {
@@ -399,24 +395,24 @@
       font-weight: 700;
       letter-spacing: 2px;
       text-transform: uppercase;
-      color: rgba(0,212,170,0.9);
+      color: rgba(255,255,255,0.95);
       pointer-events: none;
       white-space: nowrap;
     }
     .edge-trigger.right .trigger-icon {
-      color: rgba(139,92,246,0.9);
+      color: rgba(255,255,255,0.95);
       transform: rotate(180deg);
     }
     .trigger-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--teal);
+      background: rgba(255,255,255,0.75);
       animation: pulseDot 2s ease-in-out infinite;
       flex-shrink: 0;
     }
     .edge-trigger.right .trigger-dot {
-      background: #8b5cf6;
+      background: rgba(255,255,255,0.75);
     }
     @keyframes pulseDot {
       0%, 100% { opacity: 1; transform: scale(1); }
@@ -429,7 +425,7 @@
       top: 50%;
       z-index: 999;
       width: 42px;
-      height: 120px;
+      height: 84px;
       display: flex;
       flex-direction: column;
       overflow: visible;
@@ -437,27 +433,27 @@
       opacity: 0;
       transition: width 0.45s cubic-bezier(0.34, 1.2, 0.64, 1),
                   height 0.45s cubic-bezier(0.34, 1.2, 0.64, 1),
-                  transform 0.45s cubic-bezier(0.34, 1.2, 0.64, 1),
                   opacity 0.3s ease;
     }
     .edge-panel.left-panel {
       left: 0;
-      transform: translateY(-50%) translateX(0);
+      transform: translateY(-50%);
       transform-origin: left center;
     }
     .edge-panel.right-panel {
       right: 0;
-      transform: translateY(-50%) translateX(0);
+      transform: translateY(-50%);
       transform-origin: right center;
     }
     .edge-panel.open {
       width: 320px;
-      height: 88vh;
+      height: 62vh;
       opacity: 1;
       pointer-events: all;
     }
-    .edge-panel.left-panel.open  { transform: translateY(-50%) translateX(20px); }
-    .edge-panel.right-panel.open { transform: translateY(-50%) translateX(-20px); }
+    /* No translateX offset — panel stays flush with edge so trigger+panel share zone */
+    .edge-panel.left-panel.open  { transform: translateY(-50%); }
+    .edge-panel.right-panel.open { transform: translateY(-50%); }
 
     /* Inner clip — carries all the visual styling + clips content to rounded corners */
     .panel-clip {
@@ -944,25 +940,7 @@
       color: #8b5cf6;
       box-shadow: 0 0 12px rgba(139,92,246,0.25);
     }
-    /* Close button */
-    .rail-close:hover {
-      background: rgba(255,77,109,0.15);
-      border-color: rgba(255,77,109,0.4);
-      color: rgba(255,77,109,0.9);
-      transform: scale(1.12) rotate(90deg);
-    }
-    /* Separator between pin and close */
-    .rail-sep {
-      width: 16px;
-      height: 1px;
-      background: rgba(255,255,255,0.08);
-      border-radius: 99px;
-    }
-    /* Close (×) button — hidden until panel is pinned */
-    .rail-close { display: none; }
-    .rail-sep    { display: none; }
-    .edge-panel.pinned .rail-close { display: flex; }
-    .edge-panel.pinned .rail-sep   { display: block; }
+    /* Close button (removed — pin toggle handles open/close) */
 
     /* Pinned indicator dot on trigger */
     .edge-trigger .pin-dot {
@@ -1224,14 +1202,6 @@
         <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z"/>
       </svg>
     </button>
-    <div class="rail-sep"></div>
-    <button class="rail-btn rail-close"
-      onclick="closePinnedPanel('timer-panel','timer-trigger')"
-      type="button" title="Dismiss">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-      </svg>
-    </button>
   </div>
 
   <!-- All visual content lives in panel-clip (clips to rounded corners) -->
@@ -1333,14 +1303,6 @@
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="17" x2="12" y2="22"/>
         <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z"/>
-      </svg>
-    </button>
-    <div class="rail-sep"></div>
-    <button class="rail-btn rail-close"
-      onclick="closePinnedPanel('ai-panel','ai-trigger')"
-      type="button" title="Dismiss">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
   </div>
@@ -1564,30 +1526,78 @@
 
     let closeTimer = null;
     let pinned = false;
+    let isOpen = false;
+
+    function isInsideZone(x, y) {
+      const isLeft = triggerId.includes('timer') || panelId.includes('timer');
+      const w = window.innerWidth;
+      
+      if (isLeft) {
+        if (!isOpen) {
+          // Closed trigger zone: left edge up to 46px
+          return x <= 46;
+        } else {
+          // Open panel zone: left edge up to 340px (gives hover padding)
+          return x <= 340;
+        }
+      } else {
+        if (!isOpen) {
+          // Closed trigger zone: right edge
+          return x >= (w - 46);
+        } else {
+          // Open panel zone: right edge
+          return x >= (w - 340);
+        }
+      }
+    }
 
     function openPanel() {
-      clearTimeout(closeTimer);
-      panel.classList.add('open');
-      trigger.classList.add('active');
+      if (closeTimer) {
+        clearTimeout(closeTimer);
+        closeTimer = null;
+      }
+      if (!isOpen) {
+        isOpen = true;
+        panel.classList.add('open');
+        trigger.classList.add('active');
+      }
     }
+
     function scheduleClose() {
-      if (pinned) return;   // ignore hover-out when pinned
+      if (pinned) return;
+      if (closeTimer) return; // Already scheduled to close, don't reset timer
       closeTimer = setTimeout(() => {
+        isOpen = false;
         panel.classList.remove('open');
         trigger.classList.remove('active');
-      }, 280);
+        closeTimer = null;
+      }, 300); // 300ms responsive close delay
     }
 
-    trigger.addEventListener('mouseenter', openPanel);
-    trigger.addEventListener('mouseleave', scheduleClose);
-    panel.addEventListener('mouseenter',  openPanel);
-    panel.addEventListener('mouseleave',  scheduleClose);
+    // Use document-level pointermove — immune to synthetic mouseleave events
+    document.addEventListener('pointermove', (e) => {
+      if (pinned) return;
+      if (isInsideZone(e.clientX, e.clientY)) {
+        openPanel();
+      } else if (isOpen) {
+        scheduleClose();
+      }
+    });
 
-    // Touch: tap trigger to toggle (only when not pinned)
+    // Touch/click toggle for trigger
     trigger.addEventListener('click', () => {
       if (!pinned) {
-        const isOpen = panel.classList.toggle('open');
-        trigger.classList.toggle('active', isOpen);
+        if (isOpen) {
+          isOpen = false;
+          if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+          }
+          panel.classList.remove('open');
+          trigger.classList.remove('active');
+        } else {
+          openPanel();
+        }
       }
     });
 
@@ -1596,6 +1606,11 @@
       isPinned() { return pinned; },
       pin() {
         pinned = true;
+        isOpen = true;
+        if (closeTimer) {
+          clearTimeout(closeTimer);
+          closeTimer = null;
+        }
         panel.classList.add('open', 'pinned');
         trigger.classList.add('panel-pinned', 'active');
         // Mark the rail pin button active
@@ -1605,6 +1620,11 @@
       },
       unpin() {
         pinned = false;
+        isOpen = false;
+        if (closeTimer) {
+          clearTimeout(closeTimer);
+          closeTimer = null;
+        }
         panel.classList.remove('pinned', 'open');
         trigger.classList.remove('panel-pinned', 'active');
         const pinBtn = panel.querySelector('.rail-pin');
