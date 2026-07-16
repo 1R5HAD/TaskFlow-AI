@@ -4,6 +4,12 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>TaskFlow AI</title>
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -28,6 +34,30 @@
       --low:   #00d4aa;
       --r:     12px;
       --r2:    8px;
+      --shadow: none;
+      --complete-chk: #080808;
+    }
+
+    :root[data-theme="light"] {
+      --bg:    #f8fafc;
+      --s1:    #ffffff;
+      --s2:    #f1f5f9;
+      --s3:    #e2e8f0;
+      --b1:    rgba(15, 23, 42, 0.06);
+      --b2:    rgba(15, 23, 42, 0.12);
+      --b3:    rgba(15, 23, 42, 0.2);
+      --text:  #0f172a;
+      --muted: #94a3b8;
+      --muted2:#64748b;
+      --teal:  #0d9488;
+      --teal2: #0f766e;
+      --tdim:  rgba(13, 148, 136, 0.08);
+      --tdim2: rgba(13, 148, 136, 0.15);
+      --high:  #e11d48;
+      --med:   #d97706;
+      --low:   #0d9488;
+      --shadow: 0 4px 12px rgba(15, 23, 42, 0.03), 0 1px 3px rgba(15, 23, 42, 0.02);
+      --complete-chk: #ffffff;
     }
 
     body {
@@ -90,6 +120,7 @@
       background: var(--s1); border: 1px solid var(--b1);
       border-radius: var(--r2); padding: 16px 12px; text-align: center;
       transition: border-color 0.2s, transform 0.2s;
+      box-shadow: var(--shadow);
     }
     .stat:hover { border-color: var(--b2); transform: translateY(-1px); }
     .stat .n {
@@ -105,6 +136,7 @@
       border-radius: var(--r); padding: 20px;
       margin-bottom: 24px; transition: border-color 0.2s;
       animation: fadeUp 0.4s 0.15s ease both;
+      box-shadow: var(--shadow);
     }
     .form-wrap:focus-within { border-color: var(--tdim2); }
     .flabel { font-size: 9px; color: var(--muted2); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 12px; display: block; }
@@ -168,6 +200,7 @@
       position: relative; overflow: hidden;
       transition: border-color 0.2s, background 0.2s, opacity 0.3s, transform 0.3s, max-height 0.35s;
       animation: slideIn 0.3s ease both;
+      box-shadow: var(--shadow);
     }
     .task-card:hover { border-color: var(--b2); background: var(--s2); }
     .task-card::before {
@@ -269,6 +302,36 @@
       .btn-add { width: 100%; }
       .stats { gap: 6px; }
     }
+
+    /* ── THEME TOGGLE ── */
+    .theme-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .theme-btn {
+      background: transparent;
+      border: 1px solid var(--b2);
+      color: var(--muted2);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .theme-btn:hover {
+      border-color: var(--teal);
+      color: var(--teal);
+      background: var(--s2);
+    }
+    .sun-icon { display: block; }
+    .moon-icon { display: none; }
+    [data-theme="light"] .sun-icon { display: none; }
+    [data-theme="light"] .moon-icon { display: block; }
+    [data-theme="light"] .stat .l { color: var(--muted2); }
   </style>
 </head>
 <body>
@@ -280,11 +343,19 @@
       Task<em>Flow</em> AI
       <small>personal productivity</small>
     </div>
-    <a class="user-pill" href="/logout" title="Sign out">
-      <div class="avatar">{{ current_user.username[0].upper() }}</div>
-      <span class="uname">{{ current_user.username }}</span>
-      <span class="usignout">· sign out</span>
-    </a>
+    <div class="theme-actions">
+      <button id="theme-toggle" class="theme-btn" title="Toggle Theme" type="button">
+        <!-- Sun icon (shows in dark mode) -->
+        <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <!-- Moon icon (shows in light mode) -->
+        <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a class="user-pill" href="/logout" title="Sign out">
+        <div class="avatar">{{ current_user.username[0].upper() }}</div>
+        <span class="uname">{{ current_user.username }}</span>
+        <span class="usignout">· sign out</span>
+      </a>
+    </div>
   </header>
 
   <!-- Progress bar -->
@@ -360,7 +431,7 @@
       <a href="/complete/{{ task.id }}" class="complete-btn-link">
         <button class="complete-btn" title="Toggle complete" type="button" onclick="handleComplete(event, {{ task.id }})">
           <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6L5 9L10 3" stroke="#080808" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 6L5 9L10 3" stroke="var(--complete-chk)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
       </a>
@@ -531,6 +602,17 @@
     cel.classList.toggle('show', all.length > 0 && all.length === done.length);
   }
   checkCelebration();
+
+  // ── Theme toggle logic ──────────────────────────────────────
+  const toggleBtn = document.getElementById('theme-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+    });
+  }
 </script>
 </body>
 </html>
