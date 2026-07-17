@@ -1,13 +1,16 @@
 import os
+import json
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+
+from ai.chat_engine import classify_message
 
 app = Flask(__name__)
 
@@ -55,6 +58,64 @@ class Task(db.Model):
     completed  = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+
+# ─── AI ROUTINE MODELS ─────────────────────────────────────────────────────────
+
+class Habit(db.Model):
+    """A recurring task template — e.g. 'Solve 2 DSA problems'. The chatbot
+    creates these from a routine request; daily rows in DailyTask are generated
+    from active habits each day."""
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title      = db.Column(db.String(200), nullable=False)
+    category   = db.Column(db.String(50), nullable=True)   # e.g. 'coding', 'dsa', 'language'
+    frequency  = db.Column(db.String(20), default='daily')
+    active     = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    daily_tasks = db.relationship('DailyTask', backref='habit', lazy=True, cascade='all, delete-orphan')
+    streak      = db.relationship('Streak', backref='habit', uselist=False, cascade='all, delete-orphan')
+
+
+class DailyTask(db.Model):
+    """One day's instance of a habit. 'Reset daily' = a fresh row per date,
+    not a mutation of the habit itself."""
+    id           = db.Column(db.Integer, primary_key=True)
+    habit_id     = db.Column(db.Integer, db.ForeignKey('habit.id'), nullable=False)
+    user_id      = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    date         = db.Column(db.Date, nullable=False, default=date.today)
+    completed    = db.Column(db.Boolean, default=False)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('habit_id', 'date', name='uq_habit_date'),)
+
+
+class Streak(db.Model):
+    id                   = db.Column(db.Integer, primary_key=True)
+    habit_id             = db.Column(db.Integer, db.ForeignKey('habit.id'), nullable=False, unique=True)
+    current_streak       = db.Column(db.Integer, default=0)
+    longest_streak        = db.Column(db.Integer, default=0)
+    last_completed_date  = db.Column(db.Date, nullable=True)
+
+
+class ChatMessage(db.Model):
+    id        = db.Column(db.Integer, primary_key=True)
+    user_id   = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    role      = db.Column(db.String(10), nullable=False)   # 'user' | 'assistant'
+    content   = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatAction(db.Model):
+    """Undo log — one row per chatbot-made mutation, enough state to reverse it."""
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    action_type = db.Column(db.String(30), nullable=False)  # 'create_habits' | 'complete_tasks'
+    payload     = db.Column(db.Text, nullable=False)         # JSON string
+    undone      = db.Column(db.Boolean, default=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 @login_manager.user_loader
@@ -306,7 +367,30 @@ def logout():
 def index():
     tasks = Task.query.filter_by(user_id=current_user.id)\
                       .order_by(Task.created_at.desc()).all()
-    return render_template('index.html', tasks=tasks)
+
+    ensure_today_tasks(current_user)
+    daily_tasks = DailyTask.query.filter_by(user_id=current_user.id, date=date.today())\
+                                  .join(Habit).order_by(Habit.title).all()
+    routine_pct = 0
+    if daily_tasks:
+        routine_pct = round(100 * sum(1 for t in daily_tasks if t.completed) / len(daily_tasks))
+
+    return render_template('index.html', tasks=tasks, daily_tasks=daily_tasks, routine_pct=routine_pct)
+
+
+@app.route('/daily/complete/<int:daily_task_id>', methods=['POST'])
+@login_required
+def complete_daily_task(daily_task_id):
+    task = DailyTask.query.filter_by(id=daily_task_id, user_id=current_user.id).first_or_404()
+    task.completed = not task.completed
+    if task.completed:
+        task.completed_at = datetime.utcnow()
+        update_streak(task.habit_id)
+    else:
+        task.completed_at = None
+        revert_streak(task.habit_id)
+    db.session.commit()
+    return jsonify({'completed': task.completed})
 
 
 @app.route('/add', methods=['POST'])
@@ -351,6 +435,150 @@ def delete_task(task_id):
     db.session.delete(task)
     db.session.commit()
     return redirect(url_for('index'))
+
+
+# ─── AI ROUTINE HELPERS ────────────────────────────────────────────────────────
+
+def ensure_today_tasks(user):
+    """Generate today's DailyTask row for every active habit that doesn't have one yet."""
+    today = date.today()
+    habits = Habit.query.filter_by(user_id=user.id, active=True).all()
+    for h in habits:
+        if not DailyTask.query.filter_by(habit_id=h.id, date=today).first():
+            db.session.add(DailyTask(habit_id=h.id, user_id=user.id, date=today))
+    db.session.commit()
+
+
+def update_streak(habit_id):
+    streak = Streak.query.filter_by(habit_id=habit_id).first()
+    if not streak:
+        streak = Streak(habit_id=habit_id)
+        db.session.add(streak)
+
+    today = date.today()
+    if streak.last_completed_date == today:
+        return  # already counted today
+    if streak.last_completed_date == today - timedelta(days=1):
+        streak.current_streak += 1
+    else:
+        streak.current_streak = 1
+    streak.last_completed_date = today
+    streak.longest_streak = max(streak.longest_streak or 0, streak.current_streak)
+
+
+def revert_streak(habit_id):
+    """Best-effort undo — only correct if the completion being undone was today's."""
+    streak = Streak.query.filter_by(habit_id=habit_id).first()
+    if streak and streak.last_completed_date == date.today():
+        streak.current_streak = max(0, streak.current_streak - 1)
+        streak.last_completed_date = None
+
+
+# ─── ROUTES: AI CHAT ────────────────────────────────────────────────────────────
+
+@app.route('/chat', methods=['POST'])
+@login_required
+def chat():
+    user_message = (request.json or {}).get('message', '').strip()
+    if not user_message:
+        return jsonify({'error': 'empty message'}), 400
+
+    ensure_today_tasks(current_user)
+    today_tasks = DailyTask.query.filter_by(user_id=current_user.id, date=date.today()).all()
+    task_dicts = [{'id': t.id, 'content': t.habit.title, 'completed': t.completed} for t in today_tasks]
+
+    db.session.add(ChatMessage(user_id=current_user.id, role='user', content=user_message))
+    db.session.commit()
+
+    try:
+        result = classify_message(user_message, task_dicts)
+    except Exception as e:
+        print(f"[Chat] LLM error: {e}")
+        return jsonify({'reply': "Sorry, I couldn't process that right now — try again in a moment."}), 500
+
+    intent = result.get('intent')
+    reply = "I'm not sure how to help with that yet."
+    action_id = None
+
+    if intent == 'create_routine':
+        titles = []
+        for h in result.get('habits', []):
+            habit = Habit(user_id=current_user.id, title=h.get('title', '').strip(), category=h.get('category'))
+            if not habit.title:
+                continue
+            db.session.add(habit)
+            db.session.flush()  # assign habit.id before use
+            db.session.add(DailyTask(habit_id=habit.id, user_id=current_user.id, date=date.today()))
+            db.session.add(Streak(habit_id=habit.id))
+            titles.append(habit.title)
+
+        action = ChatAction(user_id=current_user.id, action_type='create_habits',
+                             payload=json.dumps({'habit_titles': titles}))
+        db.session.add(action)
+        db.session.commit()
+        action_id = action.id
+        reply = f"Set up your routine: {', '.join(titles)}. These reset daily and I'll track your streaks."
+
+    elif intent == 'complete_tasks':
+        completed_ids = []
+        for tid in result.get('task_ids', []):
+            task = DailyTask.query.filter_by(id=tid, user_id=current_user.id, date=date.today()).first()
+            if task and not task.completed:
+                task.completed = True
+                task.completed_at = datetime.utcnow()
+                update_streak(task.habit_id)
+                completed_ids.append(tid)
+
+        action = ChatAction(user_id=current_user.id, action_type='complete_tasks',
+                             payload=json.dumps({'task_ids': completed_ids}))
+        db.session.add(action)
+        db.session.commit()
+        action_id = action.id if completed_ids else None
+        reply = (f"Marked {len(completed_ids)} task(s) done — nice work."
+                 if completed_ids else "I couldn't match that to any of today's tasks.")
+
+    elif intent == 'status_query':
+        pending = [t for t in today_tasks if not t.completed]
+        reply = (f"Still open today: {', '.join(t.habit.title for t in pending)}"
+                 if pending else "Everything's done for today — nice.")
+
+    elif intent == 'clarify':
+        reply = result.get('question', 'Could you clarify that?')
+
+    elif intent == 'chat':
+        reply = result.get('reply', reply)
+
+    db.session.add(ChatMessage(user_id=current_user.id, role='assistant', content=reply))
+    db.session.commit()
+
+    return jsonify({'reply': reply, 'action_id': action_id})
+
+
+@app.route('/chat/undo/<int:action_id>', methods=['POST'])
+@login_required
+def undo_chat_action(action_id):
+    action = ChatAction.query.filter_by(id=action_id, user_id=current_user.id, undone=False).first_or_404()
+    payload = json.loads(action.payload)
+
+    if action.action_type == 'complete_tasks':
+        for tid in payload.get('task_ids', []):
+            task = DailyTask.query.filter_by(id=tid, user_id=current_user.id).first()
+            if task and task.completed:
+                task.completed = False
+                task.completed_at = None
+                revert_streak(task.habit_id)
+
+    elif action.action_type == 'create_habits':
+        habits = Habit.query.filter(
+            Habit.user_id == current_user.id,
+            Habit.title.in_(payload.get('habit_titles', []))
+        ).all()
+        for h in habits:
+            db.session.delete(h)  # cascades to daily_tasks + streak
+
+    action.undone = True
+    db.session.commit()
+    return jsonify({'status': 'undone'})
 
 
 # ─── TEST EMAIL ROUTE (remove before final submission) ────────────────────────

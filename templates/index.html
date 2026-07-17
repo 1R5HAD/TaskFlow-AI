@@ -1127,6 +1127,34 @@
     ✦ All tasks complete — great work!
   </div>
 
+  <!-- Today's Routine (AI-generated habits) -->
+  {% if daily_tasks %}
+  <div class="routine-section" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:12px;font-weight:600;opacity:0.6">Today's Routine</span>
+      <span style="font-size:11px;opacity:0.5">{{ routine_pct }}% complete</span>
+    </div>
+    <div class="task-list" id="routine-list">
+      {% for dt in daily_tasks %}
+      <div class="task-card {% if dt.completed %}completed{% endif %}" id="routine-card-{{ dt.id }}">
+        <button class="complete-btn" title="Toggle complete" type="button" onclick="toggleDailyTask({{ dt.id }}, this)">
+          <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6L5 9L10 3" stroke="var(--complete-chk)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="task-body">
+          <div class="task-content">{{ dt.habit.title }}</div>
+          <div class="task-meta">
+            {% if dt.habit.category %}<span class="badge">{{ dt.habit.category }}</span>{% endif %}
+            {% if dt.habit.streak %}<span style="font-size:11px;opacity:0.6">🔥 {{ dt.habit.streak.current_streak }} day streak</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Task list -->
   {% if tasks %}
   <div class="task-list" id="task-list">
@@ -1753,6 +1781,16 @@
   ];
   let aiResponseIndex = 0;
 
+  function toggleDailyTask(id, btnEl) {
+    fetch('/daily/complete/' + id, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        const card = document.getElementById('routine-card-' + id);
+        if (card) card.classList.toggle('completed', data.completed);
+      })
+      .catch(() => {});
+  }
+
   function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const text = input.value.trim();
@@ -1762,13 +1800,7 @@
     lockPanel('ai-panel');      // pin the panel open
     appendMessage('user', text);
     hideSuggestions();
-    showTyping();
-    setTimeout(() => {
-      removeTyping();
-      const response = aiResponses[aiResponseIndex % aiResponses.length];
-      aiResponseIndex++;
-      appendMessage('ai', response);
-    }, 1200 + Math.random() * 600);
+    sendToBackend(text);
   }
 
   function sendSuggestion(btn) {
@@ -1776,27 +1808,62 @@
     lockPanel('ai-panel');      // pin the panel open
     appendMessage('user', text);
     hideSuggestions();
-    showTyping();
-    setTimeout(() => {
-      removeTyping();
-      const response = aiResponses[aiResponseIndex % aiResponses.length];
-      aiResponseIndex++;
-      appendMessage('ai', response);
-    }, 1000 + Math.random() * 800);
+    sendToBackend(text);
   }
 
-  function appendMessage(role, text) {
+  function sendToBackend(text) {
+    showTyping();
+    fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
+    })
+      .then(res => res.json())
+      .then(data => {
+        removeTyping();
+        if (data.error) {
+          appendMessage('ai', "Sorry, something went wrong — try again.");
+          return;
+        }
+        appendMessage('ai', data.reply, data.action_id);
+        if (data.action_id) {
+          setTimeout(() => location.reload(), 900);
+        }
+      })
+      .catch(() => {
+        removeTyping();
+        appendMessage('ai', "Couldn't reach the server — check your connection and try again.");
+      });
+  }
+
+  function undoChatAction(actionId, btnEl) {
+    fetch('/chat/undo/' + actionId, { method: 'POST' })
+      .then(res => res.json())
+      .then(() => {
+        btnEl.textContent = 'Undone';
+        btnEl.disabled = true;
+        if (typeof refreshTasks === 'function') refreshTasks();
+        else location.reload();
+      })
+      .catch(() => { btnEl.textContent = 'Undo failed'; });
+  }
+
+  function appendMessage(role, text, actionId) {
     const container = document.getElementById('chat-messages');
     const now = new Date();
     const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
     const isAI = role === 'ai';
     const msgEl = document.createElement('div');
     msgEl.className = 'chat-msg ' + role;
+    const undoBtnHtml = (isAI && actionId)
+      ? `<button class="suggestion-chip" style="margin-top:6px" onclick="undoChatAction(${actionId}, this)" type="button">Undo</button>`
+      : '';
     msgEl.innerHTML = `
       <div class="msg-avatar ${isAI ? 'ai-avatar' : 'user-avatar'}">${isAI ? '✦' : '👤'}</div>
       <div>
         <div class="msg-bubble">${escapeHtml(text)}</div>
         <div class="msg-time">${timeStr}</div>
+        ${undoBtnHtml}
       </div>`;
     container.appendChild(msgEl);
     container.scrollTop = container.scrollHeight;
