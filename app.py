@@ -487,14 +487,18 @@ def chat():
     today_tasks = DailyTask.query.filter_by(user_id=current_user.id, date=date.today()).all()
     task_dicts = [{'id': t.id, 'content': t.habit.title, 'completed': t.completed} for t in today_tasks]
 
+    recent = ChatMessage.query.filter_by(user_id=current_user.id)\
+                               .order_by(ChatMessage.timestamp.desc()).limit(8).all()
+    history = [{'role': m.role, 'content': m.content} for m in reversed(recent)]
+
     db.session.add(ChatMessage(user_id=current_user.id, role='user', content=user_message))
     db.session.commit()
 
     try:
-        result = classify_message(user_message, task_dicts)
+        result = classify_message(user_message, task_dicts, history)
     except Exception as e:
         print(f"[Chat] LLM error: {e}")
-        return jsonify({'reply': "Sorry, I couldn't process that right now — try again in a moment."}), 500
+        result = {'intent': 'chat', 'reply': "Sorry, I couldn't process that — could you rephrase it?"}
 
     intent = result.get('intent')
     reply = "I'm not sure how to help with that yet."
