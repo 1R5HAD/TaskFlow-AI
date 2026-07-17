@@ -6,3 +6,4 @@ psycopg2-binary==2.9.9
 APScheduler==3.10.4
 sib-api-v3-sdk==7.6.0
 pytest==8.3.2
+google-genai>=0.3.0
