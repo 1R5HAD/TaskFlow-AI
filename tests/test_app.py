@@ -114,7 +114,7 @@ def test_login_wrong_password(client):
     }, follow_redirects=True)
 
     assert response.status_code == 200
-    assert b'New Task' not in response.data  # home page must NOT load
+    assert b'New daily task' not in response.data  # home page must NOT load
 
 
 def test_logout(client):
@@ -143,8 +143,7 @@ def test_add_task(client):
 
     client.post('/add', data={
         'content': 'Buy groceries',
-        'priority': 'medium',
-        'due_date': '2026-12-01'
+        'priority': 'medium'
     })
 
     with app.app_context():
@@ -160,7 +159,7 @@ def test_delete_task(client):
     """
     signup_and_login(client)
     client.post('/login', data={'username': 'testuser', 'password': 'password123'})
-    client.post('/add', data={'content': 'Task to delete', 'priority': 'low', 'due_date': ''})
+    client.post('/add', data={'content': 'Task to delete', 'priority': 'low'})
 
     with app.app_context():
         task = Task.query.filter_by(content='Task to delete').first()
@@ -170,7 +169,7 @@ def test_delete_task(client):
     client.get(f'/delete/{task_id}', follow_redirects=True)
 
     with app.app_context():
-        deleted = Task.query.get(task_id)
+        deleted = db.session.get(Task, task_id)
         assert deleted is None
 
 

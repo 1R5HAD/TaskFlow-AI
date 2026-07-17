@@ -4,26 +4,18 @@ import re
 from google import genai
 from google.genai import types
 
-SYSTEM_PROMPT = """You are the TaskFlow AI assistant. You help the user manage a daily \
-routine of tasks (habits) that reset each day. You are given the recent conversation \
+SYSTEM_PROMPT = """You are the TaskFlow AI assistant. You help the user manage their daily \
+tasks (which reset each day). You are given the recent conversation \
 history, today's task list (with ids), and the user's latest message. Use the \
-conversation history to stay on track — if you previously asked a question and the \
-user answered it (e.g. "yes", "coding"), treat that as building toward the goal, not \
-a brand new unrelated message. Don't repeat a question you already asked; move the \
-conversation forward.
+conversation history to stay on track.
 
 Respond with ONLY a single JSON object — no prose, no markdown fences — matching \
 exactly one of these shapes:
 
-1. You now have enough information (from this message and/or the recent history) to \
-create a routine:
+1. You now have enough information to create/add one or more daily tasks:
 {"intent": "create_routine", "habits": [{"title": "...", "category": "..."}]}
-Break it into 3-6 concrete, recurring daily habits. Titles should be short and \
-actionable (e.g. "Solve 2 DSA problems", "30 min Japanese vocab"). If the user has \
-only named one topic so far (e.g. just "coding"), you may still create a reasonable \
-routine for that one topic rather than asking again — bias toward acting once the \
-user has confirmed intent (e.g. said "yes" or "daily habit") and named at least one \
-area, rather than repeatedly re-asking.
+Break it into concrete, recurring daily tasks. Titles should be short and \
+actionable (e.g. "Solve 2 DSA problems", "Read a book chapter").
 
 2. User says they completed one or more of today's tasks:
 {"intent": "complete_tasks", "task_ids": [1, 2]}
@@ -36,7 +28,7 @@ Match against today's task list by content. Only include ids you are confident a
 history:
 {"intent": "clarify", "question": "..."}
 
-5. Anything else (small talk, a question you can just answer, encouragement):
+5. Anything else (prioritizing tasks, small talk, questions, encouragement):
 {"intent": "chat", "reply": "..."}
 
 Never invent task ids that aren't in the provided list.
@@ -64,49 +56,146 @@ def _extract_json(text):
 
 def classify_message(user_message, today_tasks, history=None):
     """
-    today_tasks: list of dicts like {'id': 1, 'content': 'Solve 2 DSA problems', 'completed': False}
+    today_tasks: list of dicts like {'id': 1, 'content': 'Solve 2 DSA problems', 'completed': False, 'priority': 'medium'}
     history: list of dicts like {'role': 'user'|'assistant', 'content': '...'}, oldest first,
              not including the current user_message.
-    Returns a parsed dict per the shapes documented in SYSTEM_PROMPT. Falls back to a
-    plain 'chat' intent if the model's output can't be parsed, rather than raising.
+    Returns a parsed dict per the shapes documented in SYSTEM_PROMPT. Falls back to local
+    rule-based matching or a plain 'chat' intent if Gemini is unavailable or errors.
     """
-    client = get_client()
-    model = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest')
+    # ── LOCAL RULE-BASED FALLBACK & SAFETY NET ────────────────────────────────
+    msg_lower = user_message.lower().strip()
+    
+    # 1. Add task / habit
+    add_match = re.search(r'(?:add|create|new)\s+(?:a\s+)?(?:habit|task)\s+(?:named\s+)?["\']?([^"\']+)["\']?', msg_lower)
+    if not add_match:
+        # Match e.g. "add football", "create reading"
+        add_match = re.search(r'^(?:add|create)\s+["\']?([^"\']+)["\']?$', msg_lower)
+        
+    if add_match:
+        habit_title = add_match.group(1).strip().capitalize()
+        habit_title = re.sub(r'[.!?]+$', '', habit_title)
+        if habit_title:
+            return {
+                'intent': 'create_routine',
+                'habits': [{'title': habit_title, 'category': 'general'}]
+            }
 
-    if today_tasks:
-        task_lines = "\n".join(
-            f"- id={t['id']} [{'done' if t['completed'] else 'pending'}] {t['content']}"
-            for t in today_tasks
-        )
+    # 2. Complete task
+    complete_match = re.search(r'(?:complete|done\s+with|finished|mark\s+done|check\s+off)\s+(.+)', msg_lower)
+    if complete_match:
+        target = complete_match.group(1).strip()
+        target = re.sub(r'[.!?]+$', '', target)
+        matched_ids = []
+        for t in today_tasks:
+            if target == str(t['id']) or f"task {t['id']}" in target:
+                matched_ids.append(t['id'])
+                break
+            if target in t['content'].lower() or t['content'].lower() in target:
+                matched_ids.append(t['id'])
+        if matched_ids:
+            return {
+                'intent': 'complete_tasks',
+                'task_ids': matched_ids
+            }
+
+    # 3. Status query
+    if any(phrase in msg_lower for phrase in ['status', "what's left", 'show tasks', 'how am i doing', 'list tasks', 'my tasks']):
+        return {
+            'intent': 'status_query'
+        }
+
+    # 4. Prioritize tasks
+    if 'prioritize' in msg_lower or 'priority' in msg_lower:
+        if today_tasks:
+            high_tasks = [t['content'] for t in today_tasks if t.get('priority') == 'high' and not t['completed']]
+            med_tasks = [t['content'] for t in today_tasks if t.get('priority') == 'medium' and not t['completed']]
+            low_tasks = [t['content'] for t in today_tasks if t.get('priority') == 'low' and not t['completed']]
+            completed_tasks = [t['content'] for t in today_tasks if t['completed']]
+            
+            reply_lines = ["Here is my recommendation for prioritizing your daily tasks:\n"]
+            if high_tasks:
+                reply_lines.append("🔴 **High Priority (Do These First):**")
+                for t in high_tasks:
+                    reply_lines.append(f"  - {t}")
+                reply_lines.append("")
+            if med_tasks:
+                reply_lines.append("🟡 **Medium Priority (Next up):**")
+                for t in med_tasks:
+                    reply_lines.append(f"  - {t}")
+                reply_lines.append("")
+            if low_tasks:
+                reply_lines.append("🟢 **Low Priority (If time permits):**")
+                for t in low_tasks:
+                    reply_lines.append(f"  - {t}")
+                reply_lines.append("")
+            if completed_tasks:
+                reply_lines.append("✅ **Completed Today:**")
+                for t in completed_tasks:
+                    reply_lines.append(f"  - {t}")
+                reply_lines.append("")
+                
+            if not (high_tasks or med_tasks or low_tasks):
+                reply_lines = ["You have no pending tasks left for today! Great job! 🎉"]
+            
+            return {
+                'intent': 'chat',
+                'reply': "\n".join(reply_lines)
+            }
+        else:
+            return {
+                'intent': 'chat',
+                'reply': "You don't have any daily tasks active yet. Add one with '+ Add' or ask me to add one!"
+            }
+
+    # ── GEMINI API EXECUTION ──────────────────────────────────────────────────
+    if os.environ.get('GEMINI_API_KEY'):
+        try:
+            client = get_client()
+            model = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+
+            if today_tasks:
+                task_lines = "\n".join(
+                    f"- id={t['id']} [{'done' if t['completed'] else 'pending'}] {t['content']} [priority={t.get('priority', 'medium')}]"
+                    for t in today_tasks
+                )
+            else:
+                task_lines = "(no tasks yet today)"
+
+            if history:
+                history_lines = "\n".join(
+                    f"{'User' if h['role'] == 'user' else 'Assistant'}: {h['content']}" for h in history
+                )
+            else:
+                history_lines = "(no prior messages)"
+
+            prompt = (
+                f"Recent conversation:\n{history_lines}\n\n"
+                f"Today's tasks:\n{task_lines}\n\n"
+                f"User's latest message: {user_message}"
+            )
+
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    response_mime_type="application/json",
+                    temperature=0.2,
+                ),
+            )
+
+            raw_text = response.text or ''
+            try:
+                return _extract_json(raw_text)
+            except (json.JSONDecodeError, ValueError):
+                print(f"[ChatEngine] Non-JSON response from model: {raw_text[:300]!r}")
+                return {'intent': 'chat', 'reply': "Could you rephrase that? I didn't quite catch it."}
+        except Exception as e:
+            print(f"[ChatEngine] Gemini error: {type(e).__name__}: {e}")
+            return {'intent': 'chat', 'reply': "I'm having a little trouble connecting to my server right now. Could we try again in a bit?"}
     else:
-        task_lines = "(no tasks yet today)"
-
-    if history:
-        history_lines = "\n".join(
-            f"{'User' if h['role'] == 'user' else 'Assistant'}: {h['content']}" for h in history
-        )
-    else:
-        history_lines = "(no prior messages)"
-
-    prompt = (
-        f"Recent conversation:\n{history_lines}\n\n"
-        f"Today's tasks:\n{task_lines}\n\n"
-        f"User's latest message: {user_message}"
-    )
-
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            temperature=0.2,
-        ),
-    )
-
-    raw_text = response.text or ''
-    try:
-        return _extract_json(raw_text)
-    except (json.JSONDecodeError, ValueError):
-        print(f"[ChatEngine] Non-JSON response from model: {raw_text[:300]!r}")
-        return {'intent': 'chat', 'reply': "Could you rephrase that? I didn't quite catch it."}
+        # Fallback explanation if API key is not configured and no rule matches
+        return {
+            'intent': 'chat',
+            'reply': "Hello! The GEMINI_API_KEY environment variable is not set. You can still manage your schedule using the dashboard controls or simple commands like 'add habit X', 'complete task X', or 'prioritize'."
+        }

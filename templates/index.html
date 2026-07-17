@@ -1069,8 +1069,8 @@
   </header>
 
   <!-- Progress bar -->
-  {% set total    = tasks | length %}
-  {% set done     = tasks | selectattr('completed') | list | length %}
+  {% set total    = daily_tasks | length %}
+  {% set done     = daily_tasks | selectattr('completed') | list | length %}
   {% set pending  = total - done %}
   {% set pct      = ((done / total * 100) | int) if total > 0 else 0 %}
 
@@ -1093,21 +1093,20 @@
 
   <!-- Add task form -->
   <div class="form-wrap">
-    <span class="flabel">New task</span>
+    <span class="flabel">New daily task</span>
     <form action="/add" method="POST">
       <div class="frow">
-        <input type="text" name="content" placeholder="What needs to be done?" autocomplete="off" required />
+        <input type="text" name="content" placeholder="What needs to be done today?" autocomplete="off" required />
         <select name="priority" id="priority-select">
           <option value="high">🔴 High</option>
           <option value="medium" selected>🟡 Medium</option>
           <option value="low">🟢 Low</option>
         </select>
-        <input type="date" name="due_date" />
         <button type="submit" class="btn-add">+ Add</button>
       </div>
       <div class="priority-hint" id="priority-hint">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        You'll be emailed if due in 2 days or less
+        High priority tasks will trigger email alerts if left incomplete.
       </div>
     </form>
   </div>
@@ -1127,86 +1126,55 @@
     ✦ All tasks complete — great work!
   </div>
 
-  <!-- Today's Routine (AI-generated habits) -->
-  <div id="routine-wrapper">
-  {% if daily_tasks %}
-  <div class="routine-section" style="margin-bottom:20px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <span style="font-size:12px;font-weight:600;opacity:0.6">Today's Routine</span>
-      <span style="font-size:11px;opacity:0.5" id="routine-pct">{{ routine_pct }}% complete</span>
-    </div>
-    <div class="task-list" id="routine-list">
+  <!-- Merged Daily Tasks List -->
+  <div class="task-list" id="task-list">
+    {% if daily_tasks %}
       {% for dt in daily_tasks %}
-      <div class="task-card {% if dt.completed %}completed{% endif %}" id="routine-card-{{ dt.id }}">
+      <div class="task-card priority-{{ dt.habit.priority }} {% if dt.completed %}completed{% endif %}"
+           data-state="{{ 'done' if dt.completed else 'pending' }}"
+           id="routine-card-{{ dt.id }}"
+           style="animation-delay: {{ loop.index0 * 0.04 }}s">
+
+        <!-- Complete toggle -->
         <button class="complete-btn" title="Toggle complete" type="button" onclick="toggleDailyTask({{ dt.id }}, this)">
           <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
             <path d="M2 6L5 9L10 3" stroke="var(--complete-chk)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
+
+        <!-- Task info -->
         <div class="task-body">
           <div class="task-content">{{ dt.habit.title }}</div>
           <div class="task-meta">
-            {% if dt.habit.category %}<span class="badge">{{ dt.habit.category }}</span>{% endif %}
-            {% if dt.habit.streak %}<span style="font-size:11px;opacity:0.6">🔥 {{ dt.habit.streak.current_streak }} day streak</span>{% endif %}
+            <span class="badge badge-{{ dt.habit.priority }}">{{ dt.habit.priority }}</span>
+            {% if dt.habit.category and dt.habit.category != 'general' %}
+              <span class="badge">{{ dt.habit.category }}</span>
+            {% endif %}
+            {% if dt.habit.streak %}
+              <span style="font-size:11px;opacity:0.6">🔥 {{ dt.habit.streak.current_streak }} day streak</span>
+            {% endif %}
           </div>
         </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-  </div>
 
-
-  <!-- Task list -->
-  {% if tasks %}
-  <div class="task-list" id="task-list">
-    {% for task in tasks %}
-    <div class="task-card priority-{{ task.priority }} {% if task.completed %}completed{% endif %} {% if task.due_date and not task.completed %}{% set parts = task.due_date.split('-') %}{% endif %}"
-         data-state="{{ 'done' if task.completed else 'pending' }}"
-         data-due="{{ task.due_date or '' }}"
-         id="card-{{ task.id }}"
-         style="animation-delay: {{ loop.index0 * 0.04 }}s">
-
-      <!-- Complete toggle -->
-      <a href="/complete/{{ task.id }}" class="complete-btn-link">
-        <button class="complete-btn" title="Toggle complete" type="button" onclick="handleComplete(event, {{ task.id }})">
-          <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6L5 9L10 3" stroke="var(--complete-chk)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Delete -->
+        <button class="delete-btn" title="Delete" type="button" onclick="handleDeleteDaily(event, {{ dt.habit.id }}, {{ dt.id }})">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14H6L5 6"></path>
+            <path d="M10 11v6M14 11v6"></path>
+            <path d="M9 6V4h6v2"></path>
           </svg>
         </button>
-      </a>
 
-      <!-- Task info -->
-      <div class="task-body">
-        <div class="task-content">{{ task.content }}</div>
-        <div class="task-meta">
-          <span class="badge badge-{{ task.priority }}">{{ task.priority }}</span>
-          {% if task.due_date %}
-            <span class="due-label" data-due="{{ task.due_date }}">📅 {{ task.due_date }}</span>
-          {% endif %}
-        </div>
       </div>
-
-      <!-- Delete -->
-      <button class="delete-btn" title="Delete" type="button" onclick="handleDelete(event, {{ task.id }})">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6l-1 14H6L5 6"></path>
-          <path d="M10 11v6M14 11v6"></path>
-          <path d="M9 6V4h6v2"></path>
-        </svg>
-      </button>
-
-    </div>
-    {% endfor %}
+      {% endfor %}
+    {% else %}
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">✓</div>
+        <p>No tasks yet — add one above to get started</p>
+      </div>
+    {% endif %}
   </div>
-  {% else %}
-  <div class="empty-state">
-    <div class="empty-icon">✓</div>
-    <p>No tasks yet — add one above to get started</p>
-  </div>
-  {% endif %}
 
 </div>
 
@@ -1453,32 +1421,27 @@
     if (label) label.textContent = visible + ' task' + (visible !== 1 ? 's' : '');
   }
 
-  // ── Handle complete (optimistic UI) ──────────────────────
-  function handleComplete(e, id) {
+  // ── Handle delete (animated removal of daily task) ────────
+  function handleDeleteDaily(e, habitId, dailyTaskId) {
     e.preventDefault();
-    const card = document.getElementById('card-' + id);
-    if (!card) return;
-    const isDone = card.classList.contains('completed');
-    card.classList.toggle('completed');
-    card.dataset.state = isDone ? 'pending' : 'done';
-    refreshDueLabels();
-    updateStats();
-    checkCelebration();
-    fetch('/complete/' + id);
-  }
-
-  // ── Handle delete (animated removal) ─────────────────────
-  function handleDelete(e, id) {
-    e.preventDefault();
-    const card = document.getElementById('card-' + id);
+    const card = document.getElementById('routine-card-' + dailyTaskId);
     if (!card) return;
     card.classList.add('removing');
     setTimeout(() => {
       card.remove();
       updateStats();
       checkCelebration();
+      // Show empty state if no tasks left
+      const list = document.getElementById('task-list');
+      if (list && list.querySelectorAll('.task-card').length === 0) {
+        list.innerHTML = `
+          <div class="empty-state" id="empty-state">
+            <div class="empty-icon">✓</div>
+            <p>No tasks yet — add one above to get started</p>
+          </div>`;
+      }
     }, 300);
-    fetch('/delete/' + id);
+    fetch('/delete/' + habitId);
   }
 
   // ── Live stats update ─────────────────────────────────────
@@ -1788,14 +1751,22 @@
     fetch('/routine/status')
       .then(res => res.json())
       .then(data => {
-        const wrapper = document.getElementById('routine-wrapper');
+        const wrapper = document.getElementById('task-list');
         if (!wrapper) return;
         if (!data.tasks || data.tasks.length === 0) {
-          wrapper.innerHTML = '';
+          wrapper.innerHTML = `
+            <div class="empty-state" id="empty-state">
+              <div class="empty-icon">✓</div>
+              <p>No tasks yet — add one above to get started</p>
+            </div>`;
+          updateStats();
+          checkCelebration();
           return;
         }
         const cards = data.tasks.map(t => `
-          <div class="task-card ${t.completed ? 'completed' : ''}" id="routine-card-${t.id}">
+          <div class="task-card priority-${t.priority || 'medium'} ${t.completed ? 'completed' : ''}" 
+               data-state="${t.completed ? 'done' : 'pending'}"
+               id="routine-card-${t.id}">
             <button class="complete-btn" title="Toggle complete" type="button" onclick="toggleDailyTask(${t.id}, this)">
               <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
                 <path d="M2 6L5 9L10 3" stroke="var(--complete-chk)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1804,19 +1775,23 @@
             <div class="task-body">
               <div class="task-content">${escapeHtml(t.title)}</div>
               <div class="task-meta">
-                ${t.category ? `<span class="badge">${escapeHtml(t.category)}</span>` : ''}
+                <span class="badge badge-${t.priority || 'medium'}">${t.priority || 'medium'}</span>
+                ${(t.category && t.category !== 'general') ? `<span class="badge">${escapeHtml(t.category)}</span>` : ''}
                 ${t.streak ? `<span style="font-size:11px;opacity:0.6">🔥 ${t.streak} day streak</span>` : ''}
               </div>
             </div>
+            <button class="delete-btn" title="Delete" type="button" onclick="handleDeleteDaily(event, ${t.habit_id}, ${t.id})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14H6L5 6"></path>
+                <path d="M10 11v6M14 11v6"></path>
+                <path d="M9 6V4h6v2"></path>
+              </svg>
+            </button>
           </div>`).join('');
-        wrapper.innerHTML = `
-          <div class="routine-section" style="margin-bottom:20px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <span style="font-size:12px;font-weight:600;opacity:0.6">Today's Routine</span>
-              <span style="font-size:11px;opacity:0.5" id="routine-pct">${data.pct}% complete</span>
-            </div>
-            <div class="task-list" id="routine-list">${cards}</div>
-          </div>`;
+        wrapper.innerHTML = cards;
+        updateStats();
+        checkCelebration();
       })
       .catch(() => {});
   }
@@ -1826,7 +1801,10 @@
       .then(res => res.json())
       .then(data => {
         const card = document.getElementById('routine-card-' + id);
-        if (card) card.classList.toggle('completed', data.completed);
+        if (card) {
+          card.classList.toggle('completed', data.completed);
+          card.dataset.state = data.completed ? 'done' : 'pending';
+        }
         refreshRoutine();   // keeps the % counter and streaks in sync
       })
       .catch(() => {});
