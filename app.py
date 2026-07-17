@@ -393,6 +393,29 @@ def complete_daily_task(daily_task_id):
     return jsonify({'completed': task.completed})
 
 
+@app.route('/routine/status')
+@login_required
+def routine_status():
+    """Today's routine as JSON — used by the chat panel to refresh the task list
+    in place, without reloading the page (which would wipe the chat)."""
+    ensure_today_tasks(current_user)
+    daily_tasks = DailyTask.query.filter_by(user_id=current_user.id, date=date.today())\
+                                  .join(Habit).order_by(Habit.title).all()
+    pct = 0
+    if daily_tasks:
+        pct = round(100 * sum(1 for t in daily_tasks if t.completed) / len(daily_tasks))
+
+    tasks_json = [{
+        'id': t.id,
+        'title': t.habit.title,
+        'category': t.habit.category,
+        'completed': t.completed,
+        'streak': t.habit.streak.current_streak if t.habit.streak else 0,
+    } for t in daily_tasks]
+
+    return jsonify({'tasks': tasks_json, 'pct': pct})
+
+
 @app.route('/add', methods=['POST'])
 @login_required
 def add_task():

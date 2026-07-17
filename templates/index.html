@@ -1128,11 +1128,12 @@
   </div>
 
   <!-- Today's Routine (AI-generated habits) -->
+  <div id="routine-wrapper">
   {% if daily_tasks %}
   <div class="routine-section" style="margin-bottom:20px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <span style="font-size:12px;font-weight:600;opacity:0.6">Today's Routine</span>
-      <span style="font-size:11px;opacity:0.5">{{ routine_pct }}% complete</span>
+      <span style="font-size:11px;opacity:0.5" id="routine-pct">{{ routine_pct }}% complete</span>
     </div>
     <div class="task-list" id="routine-list">
       {% for dt in daily_tasks %}
@@ -1154,6 +1155,8 @@
     </div>
   </div>
   {% endif %}
+  </div>
+
 
   <!-- Task list -->
   {% if tasks %}
@@ -1781,12 +1784,50 @@
   ];
   let aiResponseIndex = 0;
 
+  function refreshRoutine() {
+    fetch('/routine/status')
+      .then(res => res.json())
+      .then(data => {
+        const wrapper = document.getElementById('routine-wrapper');
+        if (!wrapper) return;
+        if (!data.tasks || data.tasks.length === 0) {
+          wrapper.innerHTML = '';
+          return;
+        }
+        const cards = data.tasks.map(t => `
+          <div class="task-card ${t.completed ? 'completed' : ''}" id="routine-card-${t.id}">
+            <button class="complete-btn" title="Toggle complete" type="button" onclick="toggleDailyTask(${t.id}, this)">
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6L5 9L10 3" stroke="var(--complete-chk)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="task-body">
+              <div class="task-content">${escapeHtml(t.title)}</div>
+              <div class="task-meta">
+                ${t.category ? `<span class="badge">${escapeHtml(t.category)}</span>` : ''}
+                ${t.streak ? `<span style="font-size:11px;opacity:0.6">🔥 ${t.streak} day streak</span>` : ''}
+              </div>
+            </div>
+          </div>`).join('');
+        wrapper.innerHTML = `
+          <div class="routine-section" style="margin-bottom:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:12px;font-weight:600;opacity:0.6">Today's Routine</span>
+              <span style="font-size:11px;opacity:0.5" id="routine-pct">${data.pct}% complete</span>
+            </div>
+            <div class="task-list" id="routine-list">${cards}</div>
+          </div>`;
+      })
+      .catch(() => {});
+  }
+
   function toggleDailyTask(id, btnEl) {
     fetch('/daily/complete/' + id, { method: 'POST' })
       .then(res => res.json())
       .then(data => {
         const card = document.getElementById('routine-card-' + id);
         if (card) card.classList.toggle('completed', data.completed);
+        refreshRoutine();   // keeps the % counter and streaks in sync
       })
       .catch(() => {});
   }
@@ -1827,7 +1868,7 @@
         }
         appendMessage('ai', data.reply, data.action_id);
         if (data.action_id) {
-          setTimeout(() => location.reload(), 900);
+          refreshRoutine();   // updates the task list in place — chat stays as-is
         }
       })
       .catch(() => {
@@ -1842,8 +1883,7 @@
       .then(() => {
         btnEl.textContent = 'Undone';
         btnEl.disabled = true;
-        if (typeof refreshTasks === 'function') refreshTasks();
-        else location.reload();
+        refreshRoutine();
       })
       .catch(() => { btnEl.textContent = 'Undo failed'; });
   }
