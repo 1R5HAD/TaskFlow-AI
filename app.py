@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 
@@ -40,8 +40,8 @@ class User(UserMixin, db.Model):
     username      = db.Column(db.String(80), unique=True, nullable=False)
     email         = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-    tasks = db.relationship('Task', backref='owner', lazy=True, cascade='all, delete-orphan')
+    created_at    = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    tasks         = db.relationship('Task', backref='owner', lazy=True, cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -54,49 +54,20 @@ class Task(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     content    = db.Column(db.String(200), nullable=False)
     priority   = db.Column(db.String(10), default='medium')
-    due_date   = db.Column(db.String(20), nullable=True)
+    due_date   = db.Column(db.String(20), nullable=True) # Kept for SQLite backward compatibility
     completed  = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-
-# ─── AI ROUTINE MODELS ─────────────────────────────────────────────────────────
-
-class Habit(db.Model):
-    """A recurring task template — e.g. 'Solve 2 DSA problems'. The chatbot
-    creates these from a routine request; daily rows in DailyTask are generated
-    from active habits each day."""
-    id         = db.Column(db.Integer, primary_key=True)
-    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    title      = db.Column(db.String(200), nullable=False)
-    category   = db.Column(db.String(50), nullable=True)   # e.g. 'coding', 'dsa', 'language'
-    frequency  = db.Column(db.String(20), default='daily')
-    active     = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    daily_tasks = db.relationship('DailyTask', backref='habit', lazy=True, cascade='all, delete-orphan')
-    streak      = db.relationship('Streak', backref='habit', uselist=False, cascade='all, delete-orphan')
-
-
-class DailyTask(db.Model):
-    """One day's instance of a habit. 'Reset daily' = a fresh row per date,
-    not a mutation of the habit itself."""
-    id           = db.Column(db.Integer, primary_key=True)
-    habit_id     = db.Column(db.Integer, db.ForeignKey('habit.id'), nullable=False)
-    user_id      = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    date         = db.Column(db.Date, nullable=False, default=date.today)
-    completed    = db.Column(db.Boolean, default=False)
-    completed_at = db.Column(db.DateTime, nullable=True)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
-
-    __table_args__ = (db.UniqueConstraint('habit_id', 'date', name='uq_habit_date'),)
+    streak     = db.relationship('Streak', backref='task', uselist=False, cascade='all, delete-orphan')
 
 
 class Streak(db.Model):
     id                   = db.Column(db.Integer, primary_key=True)
-    habit_id             = db.Column(db.Integer, db.ForeignKey('habit.id'), nullable=False, unique=True)
+    # Maps SQLAlchemy task_id property to the existing physical 'habit_id' column to preserve DB compatibility
+    task_id              = db.Column('habit_id', db.Integer, db.ForeignKey('task.id'), nullable=False, unique=True)
     current_streak       = db.Column(db.Integer, default=0)
-    longest_streak        = db.Column(db.Integer, default=0)
+    longest_streak       = db.Column(db.Integer, default=0)
     last_completed_date  = db.Column(db.Date, nullable=True)
 
 
@@ -105,7 +76,7 @@ class ChatMessage(db.Model):
     user_id   = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     role      = db.Column(db.String(10), nullable=False)   # 'user' | 'assistant'
     content   = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class ChatAction(db.Model):
@@ -115,12 +86,12 @@ class ChatAction(db.Model):
     action_type = db.Column(db.String(30), nullable=False)  # 'create_habits' | 'complete_tasks'
     payload     = db.Column(db.Text, nullable=False)         # JSON string
     undone      = db.Column(db.Boolean, default=False)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at  = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 
 # ─── EMAIL HELPER ─────────────────────────────────────────────────────────────
@@ -162,125 +133,67 @@ def send_email(to_email, to_name, subject, body):
 
 def notify_if_urgent(task, user):
     """
-    Called immediately after a HIGH priority task is created.
-    Sends an email right away if due date is 1 or 2 days from today.
+    Called immediately after a daily task is created.
+    No-op since due dates are removed.
     """
-    if task.priority != 'high' or not task.due_date:
-        return  # Only notify for high priority tasks with a due date
-
-    try:
-        due    = date.fromisoformat(task.due_date)  # parse "YYYY-MM-DD"
-        today  = date.today()
-        days_remaining = (due - today).days
-    except ValueError:
-        return  # Invalid date format — skip
-
-    if days_remaining == 2:
-        subject = f"⚠️ High Priority Task due in 2 days!"
-        body = f"""Hi {user.username},
-
-You have a HIGH priority task due in 2 days ({task.due_date}):
-
-  📌 {task.content}
-
-Make sure you complete it on time!
-
-Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
-
-— TaskFlow
-"""
-        send_email(user.email, user.username, subject, body)
-
-    elif days_remaining == 1:
-        subject = f"🚨 High Priority Task due TOMORROW!"
-        body = f"""Hi {user.username},
-
-Urgent reminder — your HIGH priority task is due TOMORROW ({task.due_date}):
-
-  📌 {task.content}
-
-Don't leave it for the last minute!
-
-Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
-
-— TaskFlow
-"""
-        send_email(user.email, user.username, subject, body)
-
-    elif days_remaining == 0:
-        subject = f"🔴 High Priority Task due TODAY!"
-        body = f"""Hi {user.username},
-
-Your HIGH priority task is due TODAY ({task.due_date}):
-
-  📌 {task.content}
-
-Complete it as soon as possible!
-
-Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
-
-— TaskFlow
-"""
-        send_email(user.email, user.username, subject, body)
-
-    else:
-        print(f"[Notify] Task '{task.content}' due in {days_remaining} days — no immediate email needed")
+    pass
 
 
-# ─── MIDNIGHT SCHEDULER — DAY-BEFORE FOLLOW-UP ───────────────────────────────
+# ─── MIDNIGHT SCHEDULER — YESTERDAY'S MISSES & RESET ─────────────────────────
 
 def midnight_check():
     """
     Runs every day at midnight IST.
-    Finds HIGH priority incomplete tasks that are now exactly 1 day away
-    (i.e. they were added when 2 days remained, now 1 day remains).
-    Sends a follow-up reminder.
+    1. Finds HIGH priority tasks from yesterday that were left incomplete,
+       and sends a follow-up email.
+    2. Resets completed status for all daily tasks to False.
     """
     with app.app_context():
-        tomorrow = (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
-        print(f"[Scheduler] Midnight check — looking for HIGH priority tasks due on {tomorrow}")
+        yesterday = date.today() - timedelta(days=1)
+        print(f"[Scheduler] Midnight check — looking for incomplete High priority tasks from yesterday")
 
         urgent_tasks = Task.query.filter_by(
-            due_date=tomorrow,
             priority='high',
             completed=False
         ).all()
 
-        if not urgent_tasks:
-            print(f"[Scheduler] No urgent tasks due tomorrow")
-            return
+        if urgent_tasks:
+            # Group by user — one email per user
+            tasks_by_user = {}
+            for task in urgent_tasks:
+                user = db.session.get(User, task.user_id)
+                if user:
+                    if user.id not in tasks_by_user:
+                        tasks_by_user[user.id] = {'user': user, 'tasks': []}
+                    tasks_by_user[user.id]['tasks'].append(task)
 
-        # Group by user — one email per user
-        tasks_by_user = {}
-        for task in urgent_tasks:
-            user = User.query.get(task.user_id)
-            if user:
-                if user.id not in tasks_by_user:
-                    tasks_by_user[user.id] = {'user': user, 'tasks': []}
-                tasks_by_user[user.id]['tasks'].append(task)
+            for entry in tasks_by_user.values():
+                user  = entry['user']
+                tasks = entry['tasks']
 
-        for entry in tasks_by_user.values():
-            user  = entry['user']
-            tasks = entry['tasks']
+                task_lines = '\n'.join(f"  📌 {t.content}" for t in tasks)
 
-            task_lines = '\n'.join(f"  📌 {t.content}" for t in tasks)
+                subject = f"⚠️ Missed High Priority task{'s' if len(tasks) > 1 else ''} yesterday!"
+                body = f"""Hi {user.username},
 
-            subject = f"🚨 {len(tasks)} High Priority task{'s' if len(tasks) > 1 else ''} due TOMORROW!"
-            body = f"""Hi {user.username},
+This is a follow-up reminder from TaskFlow.
 
-This is your follow-up reminder from TaskFlow.
-
-The following HIGH priority task{'s are' if len(tasks) > 1 else ' is'} due TOMORROW ({tomorrow}):
+The following HIGH priority daily task{'s' if len(tasks) > 1 else ''} were left incomplete yesterday:
 
 {task_lines}
 
-Make sure you complete {'them' if len(tasks) > 1 else 'it'} today!
+Try to get back on track today!
 
 Open TaskFlow: https://taskflow-ai-lc5z.onrender.com
 
 — TaskFlow
 """
-            send_email(user.email, user.username, subject, body)
+                send_email(user.email, user.username, subject, body)
+
+        # Reset daily completion statuses
+        print("[Scheduler] Resetting completion status for all daily tasks")
+        Task.query.update({Task.completed: False})
+        db.session.commit()
 
 
 # ─── SCHEDULER SETUP ──────────────────────────────────────────────────────────
@@ -365,30 +278,26 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    tasks = Task.query.filter_by(user_id=current_user.id)\
-                      .order_by(Task.created_at.desc()).all()
+    # Retrieve all daily tasks for the user
+    tasks = Task.query.filter_by(user_id=current_user.id).order_by(Task.created_at.desc()).all()
+    
+    pct = 0
+    if tasks:
+        pct = round(100 * sum(1 for t in tasks if t.completed) / len(tasks))
 
-    ensure_today_tasks(current_user)
-    daily_tasks = DailyTask.query.filter_by(user_id=current_user.id, date=date.today())\
-                                  .join(Habit).order_by(Habit.title).all()
-    routine_pct = 0
-    if daily_tasks:
-        routine_pct = round(100 * sum(1 for t in daily_tasks if t.completed) / len(daily_tasks))
-
-    return render_template('index.html', tasks=tasks, daily_tasks=daily_tasks, routine_pct=routine_pct)
+    # daily_tasks is passed for backward compatibility in standard index page naming
+    return render_template('index.html', daily_tasks=tasks, routine_pct=pct)
 
 
 @app.route('/daily/complete/<int:daily_task_id>', methods=['POST'])
 @login_required
 def complete_daily_task(daily_task_id):
-    task = DailyTask.query.filter_by(id=daily_task_id, user_id=current_user.id).first_or_404()
+    task = Task.query.filter_by(id=daily_task_id, user_id=current_user.id).first_or_404()
     task.completed = not task.completed
     if task.completed:
-        task.completed_at = datetime.utcnow()
-        update_streak(task.habit_id)
+        update_streak(task.id)
     else:
-        task.completed_at = None
-        revert_streak(task.habit_id)
+        revert_streak(task.id)
     db.session.commit()
     return jsonify({'completed': task.completed})
 
@@ -396,22 +305,21 @@ def complete_daily_task(daily_task_id):
 @app.route('/routine/status')
 @login_required
 def routine_status():
-    """Today's routine as JSON — used by the chat panel to refresh the task list
-    in place, without reloading the page (which would wipe the chat)."""
-    ensure_today_tasks(current_user)
-    daily_tasks = DailyTask.query.filter_by(user_id=current_user.id, date=date.today())\
-                                  .join(Habit).order_by(Habit.title).all()
+    """Today's tasks as JSON — used by the chat panel to refresh the task list
+    in place, without reloading the page."""
+    tasks = Task.query.filter_by(user_id=current_user.id).order_by(Task.created_at.desc()).all()
     pct = 0
-    if daily_tasks:
-        pct = round(100 * sum(1 for t in daily_tasks if t.completed) / len(daily_tasks))
+    if tasks:
+        pct = round(100 * sum(1 for t in tasks if t.completed) / len(tasks))
 
     tasks_json = [{
         'id': t.id,
-        'title': t.habit.title,
-        'category': t.habit.category,
+        'habit_id': t.id,
+        'title': t.content,
+        'priority': t.priority,
         'completed': t.completed,
-        'streak': t.habit.streak.current_streak if t.habit.streak else 0,
-    } for t in daily_tasks]
+        'streak': t.streak.current_streak if t.streak else 0,
+    } for t in tasks]
 
     return jsonify({'tasks': tasks_json, 'pct': pct})
 
@@ -421,7 +329,6 @@ def routine_status():
 def add_task():
     content  = request.form.get('content', '').strip()
     priority = request.form.get('priority', 'medium')
-    due_date = request.form.get('due_date', None)
 
     if not content:
         return redirect(url_for('index'))
@@ -429,25 +336,31 @@ def add_task():
     new_task = Task(
         content  = content,
         priority = priority,
-        due_date = due_date if due_date else None,
         user_id  = current_user.id
     )
     db.session.add(new_task)
+    db.session.flush() # assign ID
+
+    # Create a Streak for this task
+    db.session.add(Streak(task_id=new_task.id))
+
     db.session.commit()
-
-    # ── Real-time notification ──────────────────────────────
-    # Check immediately after saving — no waiting for a scheduler
-    notify_if_urgent(new_task, current_user)
-
     return redirect(url_for('index'))
 
 
-@app.route('/complete/<int:task_id>')
+@app.route('/complete/<int:daily_task_id>', methods=['POST', 'GET'])
 @login_required
-def complete_task(task_id):
-    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+def complete_task(daily_task_id):
+    task = Task.query.filter_by(id=daily_task_id, user_id=current_user.id).first_or_404()
     task.completed = not task.completed
+    if task.completed:
+        update_streak(task.id)
+    else:
+        revert_streak(task.id)
     db.session.commit()
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.args.get('ajax') == '1' or request.method == 'POST':
+        return jsonify({'completed': task.completed})
     return redirect(url_for('index'))
 
 
@@ -460,22 +373,17 @@ def delete_task(task_id):
     return redirect(url_for('index'))
 
 
-# ─── AI ROUTINE HELPERS ────────────────────────────────────────────────────────
+# ─── STREAK HELPERS ──────────────────────────────────────────────────────────
 
 def ensure_today_tasks(user):
-    """Generate today's DailyTask row for every active habit that doesn't have one yet."""
-    today = date.today()
-    habits = Habit.query.filter_by(user_id=user.id, active=True).all()
-    for h in habits:
-        if not DailyTask.query.filter_by(habit_id=h.id, date=today).first():
-            db.session.add(DailyTask(habit_id=h.id, user_id=user.id, date=today))
-    db.session.commit()
+    """No-op wrapper to avoid breaking code calling this on index or chat routes."""
+    pass
 
 
-def update_streak(habit_id):
-    streak = Streak.query.filter_by(habit_id=habit_id).first()
+def update_streak(task_id):
+    streak = Streak.query.filter_by(task_id=task_id).first()
     if not streak:
-        streak = Streak(habit_id=habit_id)
+        streak = Streak(task_id=task_id)
         db.session.add(streak)
 
     today = date.today()
@@ -489,9 +397,9 @@ def update_streak(habit_id):
     streak.longest_streak = max(streak.longest_streak or 0, streak.current_streak)
 
 
-def revert_streak(habit_id):
+def revert_streak(task_id):
     """Best-effort undo — only correct if the completion being undone was today's."""
-    streak = Streak.query.filter_by(habit_id=habit_id).first()
+    streak = Streak.query.filter_by(task_id=task_id).first()
     if streak and streak.last_completed_date == date.today():
         streak.current_streak = max(0, streak.current_streak - 1)
         streak.last_completed_date = None
@@ -506,9 +414,8 @@ def chat():
     if not user_message:
         return jsonify({'error': 'empty message'}), 400
 
-    ensure_today_tasks(current_user)
-    today_tasks = DailyTask.query.filter_by(user_id=current_user.id, date=date.today()).all()
-    task_dicts = [{'id': t.id, 'content': t.habit.title, 'completed': t.completed} for t in today_tasks]
+    today_tasks = Task.query.filter_by(user_id=current_user.id).all()
+    task_dicts = [{'id': t.id, 'content': t.content, 'completed': t.completed, 'priority': t.priority} for t in today_tasks]
 
     recent = ChatMessage.query.filter_by(user_id=current_user.id)\
                                .order_by(ChatMessage.timestamp.desc()).limit(8).all()
@@ -531,30 +438,28 @@ def chat():
     if intent == 'create_routine':
         titles = []
         for h in result.get('habits', []):
-            habit = Habit(user_id=current_user.id, title=h.get('title', '').strip(), category=h.get('category'))
-            if not habit.title:
+            task = Task(user_id=current_user.id, content=h.get('title', '').strip(), priority=h.get('priority', 'medium'))
+            if not task.content:
                 continue
-            db.session.add(habit)
-            db.session.flush()  # assign habit.id before use
-            db.session.add(DailyTask(habit_id=habit.id, user_id=current_user.id, date=date.today()))
-            db.session.add(Streak(habit_id=habit.id))
-            titles.append(habit.title)
+            db.session.add(task)
+            db.session.flush()  # assign task.id
+            db.session.add(Streak(task_id=task.id))
+            titles.append(task.content)
 
         action = ChatAction(user_id=current_user.id, action_type='create_habits',
                              payload=json.dumps({'habit_titles': titles}))
         db.session.add(action)
         db.session.commit()
         action_id = action.id
-        reply = f"Set up your routine: {', '.join(titles)}. These reset daily and I'll track your streaks."
+        reply = f"Added task(s) to your daily manager: {', '.join(titles)}."
 
     elif intent == 'complete_tasks':
         completed_ids = []
         for tid in result.get('task_ids', []):
-            task = DailyTask.query.filter_by(id=tid, user_id=current_user.id, date=date.today()).first()
+            task = Task.query.filter_by(id=tid, user_id=current_user.id).first()
             if task and not task.completed:
                 task.completed = True
-                task.completed_at = datetime.utcnow()
-                update_streak(task.habit_id)
+                update_streak(task.id)
                 completed_ids.append(tid)
 
         action = ChatAction(user_id=current_user.id, action_type='complete_tasks',
@@ -567,7 +472,7 @@ def chat():
 
     elif intent == 'status_query':
         pending = [t for t in today_tasks if not t.completed]
-        reply = (f"Still open today: {', '.join(t.habit.title for t in pending)}"
+        reply = (f"Still open today: {', '.join(t.content for t in pending)}"
                  if pending else "Everything's done for today — nice.")
 
     elif intent == 'clarify':
@@ -593,19 +498,18 @@ def undo_chat_action(action_id):
 
     if action.action_type == 'complete_tasks':
         for tid in payload.get('task_ids', []):
-            task = DailyTask.query.filter_by(id=tid, user_id=current_user.id).first()
+            task = Task.query.filter_by(id=tid, user_id=current_user.id).first()
             if task and task.completed:
                 task.completed = False
-                task.completed_at = None
-                revert_streak(task.habit_id)
+                revert_streak(task.id)
 
     elif action.action_type == 'create_habits':
-        habits = Habit.query.filter(
-            Habit.user_id == current_user.id,
-            Habit.title.in_(payload.get('habit_titles', []))
+        tasks = Task.query.filter(
+            Task.user_id == current_user.id,
+            Task.content.in_(payload.get('habit_titles', []))
         ).all()
-        for h in habits:
-            db.session.delete(h)  # cascades to daily_tasks + streak
+        for t in tasks:
+            db.session.delete(t)  # cascades to streak
 
     action.undone = True
     db.session.commit()
