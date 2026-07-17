@@ -6,7 +6,7 @@
 ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=githubactions)
 ![Deploy](https://img.shields.io/badge/Deployed-Render-46E3B7?logo=render)
 ![Tests](https://img.shields.io/badge/Tests-8%20Passed-brightgreen?logo=pytest)
-
+yes
 A fully functional multi-user To-Do web application with a complete end-to-end DevOps pipeline — automated testing, Docker containerization, CI/CD via GitHub Actions, and cloud deployment on Render with PostgreSQL.
 
 > 🎓 Built as part of the **DevOps (25CSE1663)** course — Semester 6, CSE, BNMIT
