@@ -494,8 +494,7 @@ def chat():
         result = classify_message(user_message, task_dicts)
     except Exception as e:
         print(f"[Chat] LLM error: {e}")
-        return jsonify({'reply': "Sorry, I couldn't process that right now — try again in a moment.",
-                         'debug_error': str(e)}), 500
+        return jsonify({'reply': "Sorry, I couldn't process that right now — try again in a moment."}), 500
 
     intent = result.get('intent')
     reply = "I'm not sure how to help with that yet."

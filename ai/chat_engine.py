@@ -49,7 +49,7 @@ def classify_message(user_message, today_tasks):
     Returns a parsed dict per the shapes documented in SYSTEM_PROMPT.
     """
     client = get_client()
-    model = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+    model = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest')
 
     if today_tasks:
         task_lines = "\n".join(
