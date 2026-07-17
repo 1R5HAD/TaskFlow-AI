@@ -537,6 +537,14 @@ def test_email():
 
 with app.app_context():
     db.create_all()
+    # Programmatically drop the legacy PostgreSQL foreign key constraint if it exists
+    try:
+        db.session.execute(db.text('ALTER TABLE streak DROP CONSTRAINT IF EXISTS streak_habit_id_fkey;'))
+        db.session.commit()
+        print("[Database] Legacy foreign key constraint dropped successfully.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Database] Skip dropping constraint: {e}")
 
 start_scheduler()
 
