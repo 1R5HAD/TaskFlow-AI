@@ -497,8 +497,9 @@ def chat():
     try:
         result = classify_message(user_message, task_dicts, history)
     except Exception as e:
-        print(f"[Chat] LLM error: {e}")
-        result = {'intent': 'chat', 'reply': "Sorry, I couldn't process that — could you rephrase it?"}
+        print(f"[Chat] LLM error: {type(e).__name__}: {e}")
+        result = {'intent': 'chat', 'reply': "Sorry, I couldn't process that — could you rephrase it?",
+                  'debug_error': f"{type(e).__name__}: {e}"}
 
     intent = result.get('intent')
     reply = "I'm not sure how to help with that yet."
@@ -555,7 +556,10 @@ def chat():
     db.session.add(ChatMessage(user_id=current_user.id, role='assistant', content=reply))
     db.session.commit()
 
-    return jsonify({'reply': reply, 'action_id': action_id})
+    resp = {'reply': reply, 'action_id': action_id}
+    if 'debug_error' in result:
+        resp['debug_error'] = result['debug_error']
+    return jsonify(resp)
 
 
 @app.route('/chat/undo/<int:action_id>', methods=['POST'])
