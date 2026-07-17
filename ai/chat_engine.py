@@ -147,6 +147,20 @@ def classify_message(user_message, today_tasks, history=None):
                 'reply': "You don't have any daily tasks active yet. Add one with '+ Add' or ask me to add one!"
             }
 
+    # 5. Focus session suggestion
+    if 'plan a focus session' in msg_lower or 'focus session' in msg_lower or 'timer' in msg_lower:
+        return {
+            'intent': 'chat',
+            'reply': "I'd love to help you plan a focus session! I recommend a 25-minute Pomodoro block:\n\n1. **Choose one task** from your list.\n2. **Set the Focus Timer** (available in the left panel ⏱️) to 25 minutes.\n3. **Minimize distractions** (close tabs, put phone away).\n4. **Work single-mindedly** until the timer rings.\n5. **Take a 5-minute break**, then repeat!"
+        }
+
+    # 6. Productivity tips suggestion
+    if 'tips to boost productivity' in msg_lower or 'productivity tips' in msg_lower or 'boost productivity' in msg_lower:
+        return {
+            'intent': 'chat',
+            'reply': "Here are my top 3 productivity tips to stay on track:\n\n1. **Eat the Frog**: Complete your highest-priority task first thing in the morning.\n2. **Time-Boxing**: Allocate fixed time slots to specific tasks to prevent them from dragging on.\n3. **Minimize Context-Switching**: Batch similar tasks (like replying to emails or coding) together to stay in the flow zone."
+        }
+
     # ── GEMINI API EXECUTION ──────────────────────────────────────────────────
     if os.environ.get('GEMINI_API_KEY'):
         try:
