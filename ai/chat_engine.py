@@ -72,14 +72,21 @@ def classify_message(user_message, today_tasks, history=None):
             'reply': "Hey there! 👋 How can I help you with your tasks today?"
         }
 
-    # 2. Identity / Who are you fallback
+    # 2. Conversational acknowledgments ("umm", "sure", "ok", "thanks")
+    if msg_lower in ['umm', 'um', 'uh', 'sure', 'ok', 'okay', 'cool', 'thanks', 'thank you', 'great', 'nice', 'awesome', 'got it', 'k']:
+        return {
+            'intent': 'chat',
+            'reply': "Let me know what task you'd like to work on or add! (e.g., 'add Read 20 pages' or 'prioritize')"
+        }
+
+    # 3. Identity / Who are you fallback
     if any(phrase in msg_lower for phrase in ['who are you', 'who r u', 'what is your name', 'what are you', 'who created you']):
         return {
             'intent': 'chat',
             'reply': "I'm TaskFlow AI! I'm your productivity assistant designed to help you organize daily tasks, track habits, and stay focused."
         }
 
-    # 3. Help / What can you do fallback
+    # 4. Help / What can you do fallback
     if any(phrase in msg_lower for phrase in ['what can you do', 'how do i use you', 'help me', 'commands', 'what can i ask']):
         return {
             'intent': 'chat',
@@ -91,30 +98,55 @@ def classify_message(user_message, today_tasks, history=None):
                      "• **Focus Timer**: click the Focus tab on the left edge"
         }
 
-    # 4. Punctuation / Single question mark fallback
+    # 5. Punctuation / Single question mark fallback
     if msg_lower in ['?', '??', '???', 'help', '']:
         return {
             'intent': 'chat',
             'reply': "How can I help you today? You can ask me to add a task, check your status, or prioritize your schedule!"
         }
 
-    # 5. Incomplete / vague "add task" prompt
+    # 6. Incomplete / vague "add task" prompt
     if msg_lower in ['add a task', 'add task', 'create a task', 'create task', 'new task', 'add habit', 'create habit']:
         return {
             'intent': 'chat',
             'reply': "What task would you like to add? For example, type 'add Read 20 pages' or 'add Workout'."
         }
 
-    # 6. Focus tasks helper
-    if any(phrase in msg_lower for phrase in ['tasks to help improve focus', 'tasks to improve focus', 'tasks for focus', 'help improve focus', 'improve focus', 'boost focus']):
-        return {
-            'intent': 'create_routine',
-            'habits': [
-                {'title': '25-min Pomodoro focus session', 'category': 'focus'},
-                {'title': 'Take a 5-min screen-free break', 'category': 'focus'},
-                {'title': 'Block distracting websites for 1 hour', 'category': 'focus'}
-            ]
-        }
+    # 7. Topic-based Task Suggestions (Coding, Study, Health, Focus, General)
+    if any(k in msg_lower for k in ['suggest', 'recommend', 'ideas', 'give me tasks', 'tasks for', 'tasks to', 'improve']):
+        if any(c in msg_lower for c in ['code', 'coding', 'program', 'developer', 'dsa', 'skill', 'software']):
+            return {
+                'intent': 'create_routine',
+                'habits': [
+                    {'title': 'Solve 1 LeetCode/DSA problem', 'category': 'coding'},
+                    {'title': 'Read 20 mins of technical documentation', 'category': 'coding'},
+                    {'title': 'Build or refactor code for 30 mins', 'category': 'coding'}
+                ]
+            }
+        elif any(c in msg_lower for c in ['study', 'read', 'learn', 'book', 'exam']):
+            return {
+                'intent': 'create_routine',
+                'habits': [
+                    {'title': 'Read 20 pages of a book', 'category': 'study'},
+                    {'title': 'Review study notes for 25 mins', 'category': 'study'}
+                ]
+            }
+        elif any(c in msg_lower for c in ['health', 'fitness', 'workout', 'gym', 'exercise', 'run']):
+            return {
+                'intent': 'create_routine',
+                'habits': [
+                    {'title': '30-minute workout session', 'category': 'health'},
+                    {'title': 'Drink 2 liters of water', 'category': 'health'}
+                ]
+            }
+        elif any(c in msg_lower for c in ['focus', 'concentrat']):
+            return {
+                'intent': 'create_routine',
+                'habits': [
+                    {'title': '25-min Pomodoro focus session', 'category': 'focus'},
+                    {'title': 'Take a 5-min screen-free break', 'category': 'focus'}
+                ]
+            }
 
     # Words/phrases that signal a vague or conversational add request — these should
     # be forwarded to the LLM so it can generate specific, actionable tasks
@@ -125,7 +157,7 @@ def classify_message(user_message, today_tasks, history=None):
         r'|about|around|related to|based on|suggest|recommend|ideas|tips)\b'
     )
 
-    # 7. Add task / habit
+    # 8. Add task / habit
     add_match = re.search(r'(?:add|create|new)\s+(?:a\s+)?(?:habit|task)\s+(?:named\s+)?["\']?([^"\']+)["\']?', msg_lower)
     if not add_match:
         # Match e.g. "add football", "create reading"
@@ -150,7 +182,7 @@ def classify_message(user_message, today_tasks, history=None):
                     'habits': [{'title': habit_title, 'category': 'general'}]
                 }
 
-    # 8. Complete task
+    # 9. Complete task
     complete_match = re.search(r'(?:complete|done\s+with|finished|mark\s+done|check\s+off)\s+(.+)', msg_lower)
     if complete_match:
         target = complete_match.group(1).strip()
@@ -168,13 +200,13 @@ def classify_message(user_message, today_tasks, history=None):
                 'task_ids': matched_ids
             }
 
-    # 9. Status query
+    # 10. Status query
     if any(phrase in msg_lower for phrase in ['status', "what's left", 'show tasks', 'how am i doing', 'list tasks', 'my tasks']):
         return {
             'intent': 'status_query'
         }
 
-    # 10. Prioritize tasks
+    # 11. Prioritize tasks
     if 'prioritize' in msg_lower or 'priority' in msg_lower:
         if today_tasks:
             high_tasks = [t['content'] for t in today_tasks if t.get('priority') == 'high' and not t['completed']]
@@ -217,14 +249,14 @@ def classify_message(user_message, today_tasks, history=None):
                 'reply': "You don't have any daily tasks active yet. Add one with '+ Add' or ask me to add one!"
             }
 
-    # 11. Focus session suggestion
+    # 12. Focus session suggestion
     if 'plan a focus session' in msg_lower or 'focus session' in msg_lower or 'timer' in msg_lower:
         return {
             'intent': 'chat',
             'reply': "I'd love to help you plan a focus session! I recommend a 25-minute Pomodoro block:\n\n1. **Choose one task** from your list.\n2. **Set the Focus Timer** (available in the left panel ⏱️) to 25 minutes.\n3. **Minimize distractions** (close tabs, put phone away).\n4. **Work single-mindedly** until the timer rings.\n5. **Take a 5-minute break**, then repeat!"
         }
 
-    # 12. Productivity tips suggestion
+    # 13. Productivity tips suggestion
     if 'tips to boost productivity' in msg_lower or 'productivity tips' in msg_lower or 'boost productivity' in msg_lower:
         return {
             'intent': 'chat',
@@ -291,7 +323,7 @@ def classify_message(user_message, today_tasks, history=None):
             print(f"[ChatEngine] Gemini error: {type(e).__name__}: {e}")
             return {
                 'intent': 'chat',
-                'reply': "I'm ready to help! You can ask me to add tasks (e.g. 'add Workout'), mark tasks done, or prioritize your schedule."
+                'reply': "I'm here to help! You can ask me to add tasks (e.g. 'add Workout'), mark tasks done, check your status, or prioritize."
             }
     else:
         # Fallback explanation if API key is not configured and no rule matches
