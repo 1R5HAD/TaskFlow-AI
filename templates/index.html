@@ -143,16 +143,15 @@
 
     .frow { display: flex; gap: 7px; flex-wrap: wrap; }
 
-    input[type="text"], input[type="date"], select {
+    input[type="text"], select {
       background: var(--s2); border: 1px solid var(--b1);
       border-radius: var(--r2); color: var(--text);
       font-family: 'Inter', sans-serif; font-size: 13px;
       padding: 9px 12px; outline: none; transition: border-color 0.2s;
     }
-    input[type="text"]:focus, input[type="date"]:focus, select:focus { border-color: var(--teal); }
+    input[type="text"]:focus, select:focus { border-color: var(--teal); }
     input[type="text"]::placeholder { color: var(--muted); }
     input[type="text"] { flex: 1; min-width: 160px; }
-    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.4); cursor: pointer; }
     select option { background: var(--s2); }
 
     .btn-add {
@@ -165,14 +164,6 @@
     }
     .btn-add:hover { background: var(--teal2); }
     .btn-add:active { transform: scale(0.97); }
-
-    .priority-hint {
-      display: none; align-items: center; gap: 5px;
-      font-size: 10px; color: var(--teal); margin-top: 9px;
-      opacity: 0.85;
-      animation: fadeIn 0.2s ease both;
-    }
-    .priority-hint.show { display: flex; }
 
     /* ── SECTION HEADER ── */
     .sec-hdr {
@@ -213,15 +204,6 @@
     .task-card.completed { opacity: 0.35; }
     .task-card.completed .task-content { text-decoration: line-through; }
 
-    /* Overdue highlight */
-    .task-card.overdue:not(.completed) { border-color: rgba(255,77,109,0.2); }
-    .task-card.overdue:not(.completed)::after {
-      content: 'OVERDUE';
-      position: absolute; right: 42px; top: 13px;
-      font-size: 8px; font-weight: 700; letter-spacing: 0.8px;
-      color: var(--high); opacity: 0.7;
-    }
-
     /* removing animation */
     .task-card.removing {
       opacity: 0 !important;
@@ -255,10 +237,6 @@
     .badge-high   { background: rgba(255,77,109,0.1); color: var(--high); }
     .badge-medium { background: rgba(255,179,71,0.1); color: var(--med); }
     .badge-low    { background: rgba(0,212,170,0.1); color: var(--teal); }
-
-    .due-label { font-size: 10px; color: var(--muted2); }
-    .due-label.urgent { color: var(--high); font-weight: 600; }
-    .due-label.soon   { color: var(--med); font-weight: 600; }
 
     /* ── DELETE ── */
     .delete-btn {
@@ -378,9 +356,6 @@
     }
     .edge-trigger.left.active {
       opacity: 0;
-      /* NOTE: pointer-events intentionally kept ON.
-         Setting pointer-events:none here causes a synthetic mouseleave
-         the moment the panel opens, which re-triggers open↔close flicker. */
       transform: translateY(-50%) scale(0.85);
       transform-origin: left center;
     }
@@ -451,11 +426,10 @@
       opacity: 1;
       pointer-events: all;
     }
-    /* No translateX offset — panel stays flush with edge so trigger+panel share zone */
     .edge-panel.left-panel.open  { transform: translateY(-50%); }
     .edge-panel.right-panel.open { transform: translateY(-50%); }
 
-    /* Inner clip — carries all the visual styling + clips content to rounded corners */
+    /* Inner clip */
     .panel-clip {
       display: flex;
       flex-direction: column;
@@ -898,7 +872,6 @@
       align-items: center;
       gap: 6px;
       z-index: 10;
-      /* each panel positions this on its inner edge */
     }
     .left-panel .panel-side-rail  { right: -38px; }
     .right-panel .panel-side-rail { left: -38px; }
@@ -940,7 +913,6 @@
       color: #8b5cf6;
       box-shadow: 0 0 12px rgba(139,92,246,0.25);
     }
-    /* Close button (removed — pin toggle handles open/close) */
 
     /* Pinned indicator dot on trigger */
     .edge-trigger .pin-dot {
@@ -1091,7 +1063,7 @@
     <div class="stat"><div class="n" id="stat-done">{{ done }}</div><div class="l">Done</div></div>
   </div>
 
-  <!-- Add task form -->
+  <!-- Add task form (unified — no date, no email hint) -->
   <div class="form-wrap">
     <span class="flabel">New daily task</span>
     <form action="/add" method="POST">
@@ -1103,10 +1075,6 @@
           <option value="low">🟢 Low</option>
         </select>
         <button type="submit" class="btn-add">+ Add</button>
-      </div>
-      <div class="priority-hint" id="priority-hint">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        High priority tasks will trigger email alerts if left incomplete.
       </div>
     </form>
   </div>
@@ -1126,11 +1094,11 @@
     ✦ All tasks complete — great work!
   </div>
 
-  <!-- Merged Daily Tasks List -->
+  <!-- Unified Task List (user-added + AI-added, all in one place) -->
   <div class="task-list" id="task-list">
     {% if daily_tasks %}
       {% for dt in daily_tasks %}
-      <div class="task-card priority-{{ dt.habit.priority }} {% if dt.completed %}completed{% endif %}"
+      <div class="task-card priority-{{ dt.priority }} {% if dt.completed %}completed{% endif %}"
            data-state="{{ 'done' if dt.completed else 'pending' }}"
            id="routine-card-{{ dt.id }}"
            style="animation-delay: {{ loop.index0 * 0.04 }}s">
@@ -1144,20 +1112,17 @@
 
         <!-- Task info -->
         <div class="task-body">
-          <div class="task-content">{{ dt.habit.title }}</div>
+          <div class="task-content">{{ dt.content }}</div>
           <div class="task-meta">
-            <span class="badge badge-{{ dt.habit.priority }}">{{ dt.habit.priority }}</span>
-            {% if dt.habit.category and dt.habit.category != 'general' %}
-              <span class="badge">{{ dt.habit.category }}</span>
-            {% endif %}
-            {% if dt.habit.streak %}
-              <span style="font-size:11px;opacity:0.6">🔥 {{ dt.habit.streak.current_streak }} day streak</span>
+            <span class="badge badge-{{ dt.priority }}">{{ dt.priority }}</span>
+            {% if dt.streak %}
+              <span style="font-size:11px;opacity:0.6">🔥 {{ dt.streak.current_streak }} day streak</span>
             {% endif %}
           </div>
         </div>
 
         <!-- Delete -->
-        <button class="delete-btn" title="Delete" type="button" onclick="handleDeleteDaily(event, {{ dt.habit.id }}, {{ dt.id }})">
+        <button class="delete-btn" title="Delete" type="button" onclick="handleDeleteDaily(event, {{ dt.id }})">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6l-1 14H6L5 6"></path>
@@ -1165,7 +1130,6 @@
             <path d="M9 6V4h6v2"></path>
           </svg>
         </button>
-
       </div>
       {% endfor %}
     {% else %}
@@ -1191,7 +1155,7 @@
      LEFT PANEL — Focus Timer
 ═══════════════════════════════════════ -->
 <div class="edge-panel left-panel" id="timer-panel">
-  <!-- Side rail: pin + close on the RIGHT (inner) edge of the left panel -->
+  <!-- Side rail: pin on the RIGHT (inner) edge of the left panel -->
   <div class="panel-side-rail">
     <button class="rail-btn rail-pin" id="timer-pin-btn"
       onclick="togglePinPanel('timer-panel','timer-trigger')"
@@ -1203,7 +1167,7 @@
     </button>
   </div>
 
-  <!-- All visual content lives in panel-clip (clips to rounded corners) -->
+  <!-- All visual content lives in panel-clip -->
   <div class="panel-clip">
     <div class="panel-header">
       <div class="panel-header-icon timer-icon-wrap">
@@ -1294,7 +1258,7 @@
      RIGHT PANEL — AI Chat
 ═══════════════════════════════════════ -->
 <div class="edge-panel right-panel" id="ai-panel">
-  <!-- Side rail: pin + close on the LEFT (inner) edge of the right panel -->
+  <!-- Side rail: pin on the LEFT (inner) edge of the right panel -->
   <div class="panel-side-rail">
     <button class="rail-btn rail-pin" id="ai-pin-btn"
       onclick="togglePinPanel('ai-panel','ai-trigger')"
@@ -1306,7 +1270,7 @@
     </button>
   </div>
 
-  <!-- All visual content lives in panel-clip (clips to rounded corners) -->
+  <!-- All visual content lives in panel-clip -->
   <div class="panel-clip">
     <div class="panel-header">
       <div class="panel-header-icon ai-icon-wrap">
@@ -1332,7 +1296,7 @@
       <div class="chat-msg ai">
         <div class="msg-avatar ai-avatar">✦</div>
         <div>
-          <div class="msg-bubble">Hey! I'm your TaskFlow AI assistant. I can help you prioritize tasks, set goals, and stay productive. What's on your mind?</div>
+          <div class="msg-bubble">Hey! I'm your TaskFlow AI assistant. I can help you add tasks, prioritize, and stay productive. What's on your mind?</div>
           <div class="msg-time">now</div>
         </div>
       </div>
@@ -1362,50 +1326,6 @@
 </div><!-- end ai-panel -->
 
 <script>
-  // ── Priority hint ──────────────────────────────────────────
-  const psel  = document.getElementById('priority-select');
-  const phint = document.getElementById('priority-hint');
-  if (psel) {
-    psel.addEventListener('change', () => {
-      phint.classList.toggle('show', psel.value === 'high');
-    });
-  }
-
-  // ── Smart due date labels ──────────────────────────────────
-  function formatDue(dateStr, isCompleted) {
-    if (!dateStr) return null;
-    const today = new Date(); today.setHours(0,0,0,0);
-    const due   = new Date(dateStr + 'T00:00:00');
-    const diff  = Math.round((due - today) / 86400000);
-    if (isCompleted) return { text: '📅 ' + dateStr, cls: '' };
-    if (diff < 0)  return { text: '⚠️ Overdue by ' + Math.abs(diff) + 'd', cls: 'urgent' };
-    if (diff === 0) return { text: '🔴 Due today', cls: 'urgent' };
-    if (diff === 1) return { text: '🟠 Due tomorrow', cls: 'soon' };
-    if (diff === 2) return { text: '🟡 Due in 2 days', cls: 'soon' };
-    return { text: '📅 ' + dateStr, cls: '' };
-  }
-
-  function refreshDueLabels() {
-    document.querySelectorAll('.due-label[data-due]').forEach(el => {
-      const card = el.closest('.task-card');
-      const isCompleted = card && card.classList.contains('completed');
-      const result = formatDue(el.dataset.due, isCompleted);
-      if (result) {
-        el.textContent = result.text;
-        el.className = 'due-label ' + result.cls;
-      }
-    });
-    // Mark overdue cards
-    document.querySelectorAll('.task-card:not(.completed)').forEach(card => {
-      const due = card.dataset.due;
-      if (!due) return;
-      const today = new Date(); today.setHours(0,0,0,0);
-      const dueD  = new Date(due + 'T00:00:00');
-      card.classList.toggle('overdue', dueD < today);
-    });
-  }
-  refreshDueLabels();
-
   // ── Filter chips ──────────────────────────────────────────
   function filterTasks(el, filter) {
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
@@ -1421,10 +1341,10 @@
     if (label) label.textContent = visible + ' task' + (visible !== 1 ? 's' : '');
   }
 
-  // ── Handle delete (animated removal of daily task) ────────
-  function handleDeleteDaily(e, habitId, dailyTaskId) {
+  // ── Handle delete (animated removal) ────────────────────
+  function handleDeleteDaily(e, taskId) {
     e.preventDefault();
-    const card = document.getElementById('routine-card-' + dailyTaskId);
+    const card = document.getElementById('routine-card-' + taskId);
     if (!card) return;
     card.classList.add('removing');
     setTimeout(() => {
@@ -1441,7 +1361,7 @@
           </div>`;
       }
     }, 300);
-    fetch('/delete/' + habitId);
+    fetch('/delete/' + taskId);
   }
 
   // ── Live stats update ─────────────────────────────────────
@@ -1505,7 +1425,6 @@
   // EDGE PANEL SYSTEM  (with pin-on-interact)
   // ═══════════════════════════════════════════════
 
-  // Map of panelId -> { pinned, closeTimer, openPanel, scheduleClose }
   const panelRegistry = {};
 
   function setupEdgePanel(triggerId, panelId) {
@@ -1513,7 +1432,6 @@
     const panel   = document.getElementById(panelId);
     if (!trigger || !panel) return;
 
-    // Add the pulsing pin-indicator dot inside the trigger button
     const pinDot = document.createElement('div');
     pinDot.className = 'pin-dot';
     trigger.appendChild(pinDot);
@@ -1528,18 +1446,14 @@
       
       if (isLeft) {
         if (!isOpen) {
-          // Closed trigger zone: left edge up to 46px
           return x <= 46;
         } else {
-          // Open panel zone: left edge up to 340px (gives hover padding)
           return x <= 340;
         }
       } else {
         if (!isOpen) {
-          // Closed trigger zone: right edge
           return x >= (w - 46);
         } else {
-          // Open panel zone: right edge
           return x >= (w - 340);
         }
       }
@@ -1559,16 +1473,15 @@
 
     function scheduleClose() {
       if (pinned) return;
-      if (closeTimer) return; // Already scheduled to close, don't reset timer
+      if (closeTimer) return;
       closeTimer = setTimeout(() => {
         isOpen = false;
         panel.classList.remove('open');
         trigger.classList.remove('active');
         closeTimer = null;
-      }, 300); // 300ms responsive close delay
+      }, 300);
     }
 
-    // Use document-level pointermove — immune to synthetic mouseleave events
     document.addEventListener('pointermove', (e) => {
       if (pinned) return;
       if (isInsideZone(e.clientX, e.clientY)) {
@@ -1578,7 +1491,6 @@
       }
     });
 
-    // Touch/click toggle for trigger
     trigger.addEventListener('click', () => {
       if (!pinned) {
         if (isOpen) {
@@ -1595,7 +1507,6 @@
       }
     });
 
-    // Public API stored in registry
     panelRegistry[panelId] = {
       isPinned() { return pinned; },
       pin() {
@@ -1607,7 +1518,6 @@
         }
         panel.classList.add('open', 'pinned');
         trigger.classList.add('panel-pinned', 'active');
-        // Mark the rail pin button active
         const pinBtn = panel.querySelector('.rail-pin');
         if (pinBtn) pinBtn.classList.add('pinned');
         if (pinBtn) pinBtn.setAttribute('title', 'Unpin');
@@ -1628,19 +1538,16 @@
     };
   }
 
-  // Lock a panel open (called on first interaction like start timer / send message)
   function lockPanel(panelId) {
     panelRegistry[panelId]?.pin();
   }
 
-  // Toggle pin state manually via the rail pin button
   function togglePinPanel(panelId) {
     const reg = panelRegistry[panelId];
     if (!reg) return;
     reg.isPinned() ? reg.unpin() : reg.pin();
   }
 
-  // Close (unpin + slide away) via the rail × button
   function closePinnedPanel(panelId) {
     panelRegistry[panelId]?.unpin();
   }
@@ -1652,7 +1559,7 @@
   // FOCUS TIMER
   // ═══════════════════════════════════════════════
   const CIRCUMFERENCE = 439.82;
-  let timerTotal    = 25 * 60;  // seconds
+  let timerTotal    = 25 * 60;
   let timerLeft     = timerTotal;
   let timerRunning  = false;
   let timerInterval = null;
@@ -1682,7 +1589,7 @@
   function startTimer() {
     if (timerLeft <= 0) { timerLeft = timerTotal; }
     timerRunning = true;
-    lockPanel('timer-panel');   // pin the panel open
+    lockPanel('timer-panel');
     document.getElementById('timer-start-label').textContent = 'Pause';
     document.getElementById('timer-play-icon').innerHTML =
       '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
@@ -1737,15 +1644,6 @@
   // ═══════════════════════════════════════════════
   // AI CHAT
   // ═══════════════════════════════════════════════
-  const aiResponses = [
-    "Great question! Based on your task list, I'd suggest tackling high-priority items during your peak focus hours — usually mid-morning.",
-    "I noticed you have a few overdue tasks. Want me to help you reschedule them with realistic deadlines?",
-    "Using the Pomodoro technique with 25-minute focus blocks can really help you power through your pending tasks!",
-    "Try batching similar tasks together — it reduces context switching and can improve your output by up to 40%.",
-    "You're doing great! Consistent small progress beats sporadic bursts every time.",
-    "Consider breaking large tasks into smaller subtasks — it makes them less overwhelming and easier to track."
-  ];
-  let aiResponseIndex = 0;
 
   function refreshRoutine() {
     fetch('/routine/status')
@@ -1776,11 +1674,10 @@
               <div class="task-content">${escapeHtml(t.title)}</div>
               <div class="task-meta">
                 <span class="badge badge-${t.priority || 'medium'}">${t.priority || 'medium'}</span>
-                ${(t.category && t.category !== 'general') ? `<span class="badge">${escapeHtml(t.category)}</span>` : ''}
                 ${t.streak ? `<span style="font-size:11px;opacity:0.6">🔥 ${t.streak} day streak</span>` : ''}
               </div>
             </div>
-            <button class="delete-btn" title="Delete" type="button" onclick="handleDeleteDaily(event, ${t.habit_id}, ${t.id})">
+            <button class="delete-btn" title="Delete" type="button" onclick="handleDeleteDaily(event, ${t.id})">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6l-1 14H6L5 6"></path>
@@ -1805,7 +1702,8 @@
           card.classList.toggle('completed', data.completed);
           card.dataset.state = data.completed ? 'done' : 'pending';
         }
-        refreshRoutine();   // keeps the % counter and streaks in sync
+        updateStats();
+        checkCelebration();
       })
       .catch(() => {});
   }
@@ -1816,7 +1714,7 @@
     if (!text) return;
     input.value = '';
     input.style.height = 'auto';
-    lockPanel('ai-panel');      // pin the panel open
+    lockPanel('ai-panel');
     appendMessage('user', text);
     hideSuggestions();
     sendToBackend(text);
@@ -1824,7 +1722,7 @@
 
   function sendSuggestion(btn) {
     const text = btn.textContent.trim();
-    lockPanel('ai-panel');      // pin the panel open
+    lockPanel('ai-panel');
     appendMessage('user', text);
     hideSuggestions();
     sendToBackend(text);
@@ -1846,7 +1744,8 @@
         }
         appendMessage('ai', data.reply, data.action_id);
         if (data.action_id) {
-          refreshRoutine();   // updates the task list in place — chat stays as-is
+          // Refresh the task list in-place instead of full page reload
+          setTimeout(() => refreshRoutine(), 600);
         }
       })
       .catch(() => {

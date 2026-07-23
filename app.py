@@ -285,21 +285,7 @@ def index():
     if tasks:
         pct = round(100 * sum(1 for t in tasks if t.completed) / len(tasks))
 
-    # daily_tasks is passed for backward compatibility in standard index page naming
     return render_template('index.html', daily_tasks=tasks, routine_pct=pct)
-
-
-@app.route('/daily/complete/<int:daily_task_id>', methods=['POST'])
-@login_required
-def complete_daily_task(daily_task_id):
-    task = Task.query.filter_by(id=daily_task_id, user_id=current_user.id).first_or_404()
-    task.completed = not task.completed
-    if task.completed:
-        update_streak(task.id)
-    else:
-        revert_streak(task.id)
-    db.session.commit()
-    return jsonify({'completed': task.completed})
 
 
 @app.route('/routine/status')
@@ -314,7 +300,6 @@ def routine_status():
 
     tasks_json = [{
         'id': t.id,
-        'habit_id': t.id,
         'title': t.content,
         'priority': t.priority,
         'completed': t.completed,
@@ -322,6 +307,19 @@ def routine_status():
     } for t in tasks]
 
     return jsonify({'tasks': tasks_json, 'pct': pct})
+
+
+@app.route('/daily/complete/<int:daily_task_id>', methods=['POST'])
+@login_required
+def complete_daily_task(daily_task_id):
+    task = Task.query.filter_by(id=daily_task_id, user_id=current_user.id).first_or_404()
+    task.completed = not task.completed
+    if task.completed:
+        update_streak(task.id)
+    else:
+        revert_streak(task.id)
+    db.session.commit()
+    return jsonify({'completed': task.completed})
 
 
 @app.route('/add', methods=['POST'])
@@ -438,7 +436,9 @@ def chat():
     if intent == 'create_routine':
         titles = []
         for h in result.get('habits', []):
-            task = Task(user_id=current_user.id, content=h.get('title', '').strip(), priority=h.get('priority', 'medium'))
+            # AI tasks get added to the same list with default medium priority
+            priority = h.get('priority', 'medium')
+            task = Task(user_id=current_user.id, content=h.get('title', '').strip(), priority=priority)
             if not task.content:
                 continue
             db.session.add(task)
@@ -451,7 +451,7 @@ def chat():
         db.session.add(action)
         db.session.commit()
         action_id = action.id
-        reply = f"Added task(s) to your daily manager: {', '.join(titles)}."
+        reply = f"Added task(s) to your list: {', '.join(titles)}."
 
     elif intent == 'complete_tasks':
         completed_ids = []
