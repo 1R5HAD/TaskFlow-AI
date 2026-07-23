@@ -9,8 +9,6 @@
 
 A fully functional multi-user To-Do web application with a complete end-to-end DevOps pipeline — automated testing, Docker containerization, CI/CD via GitHub Actions, and cloud deployment on Render with PostgreSQL.
 
-> 🎓 Built as part of the **DevOps (25CSE1663)** course — Semester 6, CSE, BNMIT
-
 ---
 
 ## 🌐 Live Demo
@@ -245,6 +243,3 @@ This ensures broken code **never reaches production**.
 
 ---
 
-## 📄 License
-
-This project is built for academic purposes as part of the DevOps course at BNMIT.
