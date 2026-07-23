@@ -178,7 +178,7 @@ def classify_message(user_message, today_tasks, history=None):
     if os.environ.get('GEMINI_API_KEY'):
         try:
             client = get_client()
-            model = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash')
+            model = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest')
 
             if today_tasks:
                 task_lines = "\n".join(
