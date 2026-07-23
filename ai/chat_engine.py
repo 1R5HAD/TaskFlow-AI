@@ -64,21 +64,34 @@ def classify_message(user_message, today_tasks, history=None):
     """
     # ── LOCAL RULE-BASED FALLBACK & SAFETY NET ────────────────────────────────
     msg_lower = user_message.lower().strip()
-    
+
+    # Words/phrases that signal a vague or conversational request — these should
+    # be forwarded to the LLM so it can generate specific, actionable tasks
+    # instead of creating a single task with the literal text.
+    _VAGUE_SIGNALS = re.compile(
+        r'\b(?:some|a few|a couple|several|many|tasks|habits|routine|routines'
+        r'|to help|to improve|to boost|to increase|for me|for my|that|which'
+        r'|about|around|related to|based on|suggest|recommend|ideas|tips)\b'
+    )
+
     # 1. Add task / habit
     add_match = re.search(r'(?:add|create|new)\s+(?:a\s+)?(?:habit|task)\s+(?:named\s+)?["\']?([^"\']+)["\']?', msg_lower)
     if not add_match:
         # Match e.g. "add football", "create reading"
         add_match = re.search(r'^(?:add|create)\s+["\']?([^"\']+)["\']?$', msg_lower)
-        
+
     if add_match:
-        habit_title = add_match.group(1).strip().capitalize()
-        habit_title = re.sub(r'[.!?]+$', '', habit_title)
-        if habit_title:
-            return {
-                'intent': 'create_routine',
-                'habits': [{'title': habit_title, 'category': 'general'}]
-            }
+        captured = add_match.group(1).strip()
+        # If the captured text looks vague/conversational, skip the local
+        # shortcut and let the LLM interpret the user's real intent.
+        if not _VAGUE_SIGNALS.search(captured):
+            habit_title = captured.capitalize()
+            habit_title = re.sub(r'[.!?]+$', '', habit_title)
+            if habit_title:
+                return {
+                    'intent': 'create_routine',
+                    'habits': [{'title': habit_title, 'category': 'general'}]
+                }
 
     # 2. Complete task
     complete_match = re.search(r'(?:complete|done\s+with|finished|mark\s+done|check\s+off)\s+(.+)', msg_lower)
