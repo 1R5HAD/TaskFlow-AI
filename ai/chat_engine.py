@@ -72,7 +72,40 @@ def classify_message(user_message, today_tasks, history=None):
             'reply': "Hey there! 👋 How can I help you with your tasks today?"
         }
 
-    # 2. Focus tasks helper
+    # 2. Identity / Who are you fallback
+    if any(phrase in msg_lower for phrase in ['who are you', 'who r u', 'what is your name', 'what are you', 'who created you']):
+        return {
+            'intent': 'chat',
+            'reply': "I'm TaskFlow AI! I'm your productivity assistant designed to help you organize daily tasks, track habits, and stay focused."
+        }
+
+    # 3. Help / What can you do fallback
+    if any(phrase in msg_lower for phrase in ['what can you do', 'how do i use you', 'help me', 'commands', 'what can i ask']):
+        return {
+            'intent': 'chat',
+            'reply': "Here is how I can help you:\n\n"
+                     "• **Add tasks**: e.g., 'add Workout' or 'add Read 20 pages'\n"
+                     "• **Complete tasks**: e.g., 'done with Workout' or 'complete task 1'\n"
+                     "• **Check progress**: e.g., 'status' or 'what's left'\n"
+                     "• **Prioritize**: e.g., 'prioritize my tasks'\n"
+                     "• **Focus Timer**: click the Focus tab on the left edge"
+        }
+
+    # 4. Punctuation / Single question mark fallback
+    if msg_lower in ['?', '??', '???', 'help', '']:
+        return {
+            'intent': 'chat',
+            'reply': "How can I help you today? You can ask me to add a task, check your status, or prioritize your schedule!"
+        }
+
+    # 5. Incomplete / vague "add task" prompt
+    if msg_lower in ['add a task', 'add task', 'create a task', 'create task', 'new task', 'add habit', 'create habit']:
+        return {
+            'intent': 'chat',
+            'reply': "What task would you like to add? For example, type 'add Read 20 pages' or 'add Workout'."
+        }
+
+    # 6. Focus tasks helper
     if any(phrase in msg_lower for phrase in ['tasks to help improve focus', 'tasks to improve focus', 'tasks for focus', 'help improve focus', 'improve focus', 'boost focus']):
         return {
             'intent': 'create_routine',
@@ -92,7 +125,7 @@ def classify_message(user_message, today_tasks, history=None):
         r'|about|around|related to|based on|suggest|recommend|ideas|tips)\b'
     )
 
-    # 3. Add task / habit
+    # 7. Add task / habit
     add_match = re.search(r'(?:add|create|new)\s+(?:a\s+)?(?:habit|task)\s+(?:named\s+)?["\']?([^"\']+)["\']?', msg_lower)
     if not add_match:
         # Match e.g. "add football", "create reading"
@@ -100,6 +133,12 @@ def classify_message(user_message, today_tasks, history=None):
 
     if add_match:
         captured = add_match.group(1).strip()
+        # If the user literally said "a task", "task", etc.
+        if captured.lower() in ['a task', 'task', 'a habit', 'habit', 'tasks', 'habits', 'something', 'anything', '']:
+            return {
+                'intent': 'chat',
+                'reply': "What task would you like to add? For example, type 'add Read 20 pages' or 'add Workout'."
+            }
         # If the captured text looks vague/conversational, skip the local
         # shortcut and let the LLM interpret the user's real intent.
         if not _VAGUE_SIGNALS.search(captured):
@@ -111,7 +150,7 @@ def classify_message(user_message, today_tasks, history=None):
                     'habits': [{'title': habit_title, 'category': 'general'}]
                 }
 
-    # 4. Complete task
+    # 8. Complete task
     complete_match = re.search(r'(?:complete|done\s+with|finished|mark\s+done|check\s+off)\s+(.+)', msg_lower)
     if complete_match:
         target = complete_match.group(1).strip()
@@ -129,13 +168,13 @@ def classify_message(user_message, today_tasks, history=None):
                 'task_ids': matched_ids
             }
 
-    # 5. Status query
+    # 9. Status query
     if any(phrase in msg_lower for phrase in ['status', "what's left", 'show tasks', 'how am i doing', 'list tasks', 'my tasks']):
         return {
             'intent': 'status_query'
         }
 
-    # 6. Prioritize tasks
+    # 10. Prioritize tasks
     if 'prioritize' in msg_lower or 'priority' in msg_lower:
         if today_tasks:
             high_tasks = [t['content'] for t in today_tasks if t.get('priority') == 'high' and not t['completed']]
@@ -178,14 +217,14 @@ def classify_message(user_message, today_tasks, history=None):
                 'reply': "You don't have any daily tasks active yet. Add one with '+ Add' or ask me to add one!"
             }
 
-    # 7. Focus session suggestion
+    # 11. Focus session suggestion
     if 'plan a focus session' in msg_lower or 'focus session' in msg_lower or 'timer' in msg_lower:
         return {
             'intent': 'chat',
             'reply': "I'd love to help you plan a focus session! I recommend a 25-minute Pomodoro block:\n\n1. **Choose one task** from your list.\n2. **Set the Focus Timer** (available in the left panel ⏱️) to 25 minutes.\n3. **Minimize distractions** (close tabs, put phone away).\n4. **Work single-mindedly** until the timer rings.\n5. **Take a 5-minute break**, then repeat!"
         }
 
-    # 8. Productivity tips suggestion
+    # 12. Productivity tips suggestion
     if 'tips to boost productivity' in msg_lower or 'productivity tips' in msg_lower or 'boost productivity' in msg_lower:
         return {
             'intent': 'chat',
@@ -196,7 +235,8 @@ def classify_message(user_message, today_tasks, history=None):
     if os.environ.get('GEMINI_API_KEY'):
         try:
             client = get_client()
-            model = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
+            primary_model = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
+            fallback_models = [m for m in [primary_model, 'gemini-2.0-flash', 'gemini-1.5-flash'] if m]
 
             if today_tasks:
                 task_lines = "\n".join(
@@ -219,39 +259,39 @@ def classify_message(user_message, today_tasks, history=None):
                 f"User's latest message: {user_message}"
             )
 
-            try:
-                response = client.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        response_mime_type="application/json",
-                        temperature=0.2,
-                    ),
-                )
-            except Exception as model_err:
-                print(f"[ChatEngine] Model {model} failed ({model_err}), retrying with gemini-1.5-flash")
-                response = client.models.generate_content(
-                    model='gemini-1.5-flash',
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        response_mime_type="application/json",
-                        temperature=0.2,
-                    ),
-                )
+            response = None
+            last_err = None
+            for model_name in dict.fromkeys(fallback_models):
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT,
+                            response_mime_type="application/json",
+                            temperature=0.2,
+                        ),
+                    )
+                    if response:
+                        break
+                except Exception as err:
+                    last_err = err
+                    print(f"[ChatEngine] Model {model_name} failed ({err}), trying next model...")
 
-            raw_text = response.text or ''
-            try:
-                return _extract_json(raw_text)
-            except (json.JSONDecodeError, ValueError):
-                print(f"[ChatEngine] Non-JSON response from model: {raw_text[:300]!r}")
-                return {'intent': 'chat', 'reply': "Could you rephrase that? I'd be happy to help with your tasks!"}
+            if response and response.text:
+                try:
+                    return _extract_json(response.text)
+                except (json.JSONDecodeError, ValueError):
+                    print(f"[ChatEngine] Non-JSON response from model: {response.text[:300]!r}")
+                    return {'intent': 'chat', 'reply': "Could you rephrase that? I'd be happy to help with your tasks!"}
+
+            raise last_err or Exception("All Gemini models failed")
+
         except Exception as e:
             print(f"[ChatEngine] Gemini error: {type(e).__name__}: {e}")
             return {
                 'intent': 'chat',
-                'reply': "I'm ready to help! You can ask me to add tasks, mark tasks done, or prioritize your schedule."
+                'reply': "I'm ready to help! You can ask me to add tasks (e.g. 'add Workout'), mark tasks done, or prioritize your schedule."
             }
     else:
         # Fallback explanation if API key is not configured and no rule matches
