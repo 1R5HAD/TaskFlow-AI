@@ -426,8 +426,7 @@ def chat():
         result = classify_message(user_message, task_dicts, history)
     except Exception as e:
         print(f"[Chat] LLM error: {type(e).__name__}: {e}")
-        result = {'intent': 'chat', 'reply': "Sorry, I couldn't process that — could you rephrase it?",
-                  'debug_error': f"{type(e).__name__}: {e}"}
+        result = {'intent': 'chat', 'reply': "Sorry, I couldn't process that — could you rephrase it?"}
 
     intent = result.get('intent')
     reply = "I'm not sure how to help with that yet."
@@ -488,8 +487,6 @@ def chat():
     db.session.commit()
 
     resp = {'reply': reply, 'action_id': action_id}
-    if 'debug_error' in result:
-        resp['debug_error'] = result['debug_error']
     return jsonify(resp)
 
 
@@ -552,4 +549,4 @@ with app.app_context():
 start_scheduler()
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)

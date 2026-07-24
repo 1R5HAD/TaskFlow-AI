@@ -371,17 +371,6 @@
       pointer-events: none;
       flex-shrink: 0;
     }
-    .trigger-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.75);
-      animation: pulseDot 2s ease-in-out infinite;
-      flex-shrink: 0;
-    }
-    .edge-trigger.right .trigger-dot {
-      background: rgba(255,255,255,0.75);
-    }
     @keyframes pulseDot {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(0.6); }
@@ -1140,14 +1129,12 @@
      LEFT EDGE TRIGGER — Timer
 ═══════════════════════════════════════ -->
 <button class="edge-trigger left" id="timer-trigger" aria-label="Open Focus Timer">
-  <div class="trigger-dot"></div>
   <svg class="trigger-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="13" r="8"/>
     <path d="M12 9v4l2.5 1.5"/>
     <path d="M9.5 2.5h5"/>
     <path d="M12 2.5v2.5"/>
   </svg>
-  <div class="trigger-dot"></div>
 </button>
 
 <!-- ═══════════════════════════════════════
@@ -1248,11 +1235,9 @@
      RIGHT EDGE TRIGGER — AI
 ═══════════════════════════════════════ -->
 <button class="edge-trigger right" id="ai-trigger" aria-label="Open AI Assistant">
-  <div class="trigger-dot"></div>
   <svg class="trigger-svg" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6-5.6-1.9 5.6-1.9L12 2.5z"/>
   </svg>
-  <div class="trigger-dot"></div>
 </button>
 
 <!-- ═══════════════════════════════════════
