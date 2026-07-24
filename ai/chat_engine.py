@@ -19,9 +19,13 @@ Respond with ONLY a single JSON object — no prose, no markdown fences — matc
 exactly one of these shapes:
 
 1. You now have enough information to create/add one or more daily tasks:
-{"intent": "create_routine", "habits": [{"title": "...", "category": "..."}]}
+{"intent": "create_routine", "habits": [{"title": "...", "category": "...", "priority": "high"|"medium"|"low"}]}
 Break it into concrete, recurring daily tasks. Titles should be short and \
-actionable (e.g. "Solve 2 DSA problems", "Read a book chapter").
+actionable (e.g. "Solve 2 DSA problems", "Read a book chapter"). Default priority to \
+"medium" unless the user specifies otherwise (e.g. "make them high priority"). If the \
+user says "add them"/"add those"/"add it" referring to tasks you or they mentioned \
+earlier in the conversation history, use those specific tasks — never create a task \
+literally titled after the pronoun itself.
 
 2. User says they completed one or more of today's tasks:
 {"intent": "complete_tasks", "task_ids": [1, 2]}
@@ -34,6 +38,13 @@ Match against today's task list by content. Only include ids you are confident a
 {"intent": "delete_tasks", "task_ids": [1, 2]}
 Match against today's task list by content. Only include ids you are confident about. \
 This is a real, permanent deletion — not the daily completion reset.
+CRITICAL: if the user says "them"/"those"/"that"/"it", resolve the pronoun ONLY to the \
+specific task(s) named in the immediately preceding assistant message in the conversation \
+history — never to the user's full task list. Deleting is destructive and irreversible-\
+feeling, so when in doubt, delete FEWER tasks, not more — if you are not confident exactly \
+which tasks a pronoun refers to, use "clarify" instead of guessing. Only include ALL of the \
+user's tasks in task_ids if they explicitly say something like "all", "everything", or \
+"clear my whole list".
 
 5. Genuinely ambiguous AND you haven't already asked a similar question in the recent \
 history:
@@ -85,6 +96,12 @@ def classify_message(user_message, today_tasks, history=None):
         r'|about|around|related to|based on|suggest|recommend|ideas|tips)\b'
     )
 
+    # Bare pronouns/references that need conversation context to resolve —
+    # never safe to match locally by content; let these fall through to the
+    # LLM (with full history) instead of risking a false match or, worse,
+    # literally creating a task titled after the pronoun itself.
+    _PRONOUNS = {'them', 'those', 'that', 'it', 'this', 'all', 'everything'}
+
     # 1. Add task / habit
     add_match = re.search(r'(?:add|create|new)\s+(?:a\s+)?(?:habit|task)\s+(?:named\s+)?["\']?([^"\']+)["\']?', msg_lower)
     if not add_match:
@@ -93,9 +110,10 @@ def classify_message(user_message, today_tasks, history=None):
 
     if add_match:
         captured = add_match.group(1).strip()
-        # If the captured text looks vague/conversational, skip the local
-        # shortcut and let the LLM interpret the user's real intent.
-        if not _VAGUE_SIGNALS.search(captured):
+        # If the captured text looks vague/conversational, or is a bare pronoun
+        # with no real content of its own, skip the local shortcut and let the
+        # LLM interpret the user's real intent using conversation history.
+        if not _VAGUE_SIGNALS.search(captured) and captured not in _PRONOUNS:
             habit_title = captured.capitalize()
             habit_title = re.sub(r'[.!?]+$', '', habit_title)
             if habit_title:
@@ -109,45 +127,52 @@ def classify_message(user_message, today_tasks, history=None):
     if complete_match:
         target = complete_match.group(1).strip()
         target = re.sub(r'[.!?]+$', '', target)
-        matched_ids = []
-        for t in today_tasks:
-            if target == str(t['id']) or f"task {t['id']}" in target:
-                matched_ids.append(t['id'])
-                break
-            if target in t['content'].lower() or t['content'].lower() in target:
-                matched_ids.append(t['id'])
-        if matched_ids:
-            return {
-                'intent': 'complete_tasks',
-                'task_ids': matched_ids
-            }
+        if target not in _PRONOUNS:
+            matched_ids = []
+            for t in today_tasks:
+                if target == str(t['id']) or f"task {t['id']}" in target:
+                    matched_ids.append(t['id'])
+                    break
+                if target in t['content'].lower() or t['content'].lower() in target:
+                    matched_ids.append(t['id'])
+            if matched_ids:
+                return {
+                    'intent': 'complete_tasks',
+                    'task_ids': matched_ids
+                }
 
     # 2b. Delete task
     delete_match = re.search(r'(?:delete|remove|get\s+rid\s+of)\s+(?:the\s+)?(?:task\s+)?(.+)', msg_lower)
     if delete_match:
         target = delete_match.group(1).strip()
         target = re.sub(r'[.!?]+$', '', target)
-        matched_ids = []
-        for t in today_tasks:
-            if target == str(t['id']) or f"task {t['id']}" in target:
-                matched_ids.append(t['id'])
-                break
-            if target in t['content'].lower() or t['content'].lower() in target:
-                matched_ids.append(t['id'])
-        if matched_ids:
-            return {
-                'intent': 'delete_tasks',
-                'task_ids': matched_ids
-            }
+        if target not in _PRONOUNS:
+            matched_ids = []
+            for t in today_tasks:
+                if target == str(t['id']) or f"task {t['id']}" in target:
+                    matched_ids.append(t['id'])
+                    break
+                if target in t['content'].lower() or t['content'].lower() in target:
+                    matched_ids.append(t['id'])
+            if matched_ids:
+                return {
+                    'intent': 'delete_tasks',
+                    'task_ids': matched_ids
+                }
 
     # 3. Status query
-    if any(phrase in msg_lower for phrase in ['status', "what's left", 'show tasks', 'how am i doing', 'list tasks', 'my tasks']):
+    if any(phrase in msg_lower for phrase in ['status', "what's left", 'show tasks', 'how am i doing', 'list tasks']):
         return {
             'intent': 'status_query'
         }
 
-    # 4. Prioritize tasks
-    if 'prioritize' in msg_lower or 'priority' in msg_lower:
+    # 4. Prioritize tasks — only for an actual "prioritize my tasks" style request,
+    # not any message that merely mentions the word "priority" (e.g. "make it high
+    # priority" while adding a task, which was being hijacked by a bare substring
+    # check before it ever reached the add-task logic or the LLM).
+    is_add_or_delete_command = bool(re.match(r'^\s*(add|create|new|delete|remove)\b', msg_lower))
+    prioritize_intent = re.search(r'prioriti[sz]e|priority\s+(?:list|order)|what should i (?:work on|focus on|do)\s+first', msg_lower)
+    if prioritize_intent and not is_add_or_delete_command:
         if today_tasks:
             high_tasks = [t['content'] for t in today_tasks if t.get('priority') == 'high' and not t['completed']]
             med_tasks = [t['content'] for t in today_tasks if t.get('priority') == 'medium' and not t['completed']]
