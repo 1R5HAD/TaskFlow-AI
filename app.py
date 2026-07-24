@@ -472,8 +472,11 @@ def chat():
 
     elif intent == 'status_query':
         pending = [t for t in today_tasks if not t.completed]
-        reply = (f"Still open today: {', '.join(t.content for t in pending)}"
-                 if pending else "Everything's done for today — nice.")
+        if pending:
+            bullets = '\n'.join(f"- {t.content}" for t in pending)
+            reply = f"You have {len(pending)} task{'s' if len(pending) != 1 else ''} pending today:\n{bullets}"
+        else:
+            reply = "Everything's done for today — nice."
 
     elif intent == 'clarify':
         reply = result.get('question', 'Could you clarify that?')

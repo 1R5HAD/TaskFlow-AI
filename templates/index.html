@@ -327,7 +327,7 @@
       justify-content: center;
       gap: 10px;
       cursor: pointer;
-      width: 42px;
+      width: 46px;
       height: 84px;
       border: none;
       outline: none;
@@ -337,13 +337,13 @@
     .edge-trigger.left {
       left: 0;
       background: #00d4aa;
-      border-radius: 0 14px 14px 0;
+      clip-path: polygon(0 0, 65% 0, 100% 50%, 65% 100%, 0 100%);
       box-shadow: 4px 0 24px rgba(0,212,170,0.45);
     }
     .edge-trigger.right {
       right: 0;
       background: #8b5cf6;
-      border-radius: 14px 0 0 14px;
+      clip-path: polygon(35% 0, 100% 0, 100% 100%, 35% 100%, 0 50%);
       box-shadow: -4px 0 24px rgba(139,92,246,0.45);
     }
     .edge-trigger.left:hover {
@@ -364,19 +364,12 @@
       transform: translateY(-50%) scale(0.85);
       transform-origin: right center;
     }
-    .edge-trigger .trigger-icon {
-      writing-mode: vertical-rl;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 2px;
-      text-transform: uppercase;
+    .edge-trigger .trigger-svg {
+      width: 22px;
+      height: 22px;
       color: rgba(255,255,255,0.95);
       pointer-events: none;
-      white-space: nowrap;
-    }
-    .edge-trigger.right .trigger-icon {
-      color: rgba(255,255,255,0.95);
-      transform: rotate(180deg);
+      flex-shrink: 0;
     }
     .trigger-dot {
       width: 6px;
@@ -716,6 +709,7 @@
       font-size: 12px;
       line-height: 1.5;
       color: rgba(255,255,255,0.85);
+      white-space: pre-wrap;
     }
     .chat-msg.ai .msg-bubble {
       background: rgba(139,92,246,0.1);
@@ -1147,7 +1141,12 @@
 ═══════════════════════════════════════ -->
 <button class="edge-trigger left" id="timer-trigger" aria-label="Open Focus Timer">
   <div class="trigger-dot"></div>
-  <span class="trigger-icon">Focus</span>
+  <svg class="trigger-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="13" r="8"/>
+    <path d="M12 9v4l2.5 1.5"/>
+    <path d="M9.5 2.5h5"/>
+    <path d="M12 2.5v2.5"/>
+  </svg>
   <div class="trigger-dot"></div>
 </button>
 
@@ -1250,7 +1249,9 @@
 ═══════════════════════════════════════ -->
 <button class="edge-trigger right" id="ai-trigger" aria-label="Open AI Assistant">
   <div class="trigger-dot"></div>
-  <span class="trigger-icon">AI</span>
+  <svg class="trigger-svg" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6-5.6-1.9 5.6-1.9L12 2.5z"/>
+  </svg>
   <div class="trigger-dot"></div>
 </button>
 
@@ -1441,22 +1442,17 @@
     let isOpen = false;
 
     function isInsideZone(x, y) {
-      const isLeft = triggerId.includes('timer') || panelId.includes('timer');
-      const w = window.innerWidth;
-      
-      if (isLeft) {
-        if (!isOpen) {
-          return x <= 46;
-        } else {
-          return x <= 340;
-        }
-      } else {
-        if (!isOpen) {
-          return x >= (w - 46);
-        } else {
-          return x >= (w - 340);
-        }
+      // Use real DOM measurements instead of a hardcoded pixel threshold —
+      // the pin button lives in .panel-side-rail, which sits 38px outside
+      // the panel's own box (see CSS), so a flat threshold missed it.
+      const RAIL_MARGIN = 50; // covers the -38px rail offset plus a small buffer
+      if (!isOpen) {
+        const r = trigger.getBoundingClientRect();
+        return x >= r.left - 10 && x <= r.right + 10 && y >= r.top - 10 && y <= r.bottom + 10;
       }
+      const r = panel.getBoundingClientRect();
+      return x >= r.left - RAIL_MARGIN && x <= r.right + RAIL_MARGIN
+          && y >= r.top - 10 && y <= r.bottom + 10;
     }
 
     function openPanel() {
