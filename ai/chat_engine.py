@@ -5,9 +5,15 @@ from google import genai
 from google.genai import types
 
 SYSTEM_PROMPT = """You are the TaskFlow AI assistant. You help the user manage their daily \
-tasks (which reset each day). You are given the recent conversation \
-history, today's task list (with ids), and the user's latest message. Use the \
-conversation history to stay on track.
+tasks. You are given the recent conversation history, today's task list (with ids), and \
+the user's latest message. Use the conversation history to stay on track.
+
+Important: "resets each day" refers ONLY to the completed/done checkmark — every task's \
+`completed` status clears at midnight so the user can redo their routine fresh, but the \
+task itself is permanent and stays in their list forever until the user (or you, on their \
+behalf) explicitly deletes it. Never tell the user tasks are automatically cleared, removed, \
+or that they don't need to delete old ones — that's false. Tasks can and do accumulate \
+unless deleted, and you are able to delete them when asked.
 
 Respond with ONLY a single JSON object — no prose, no markdown fences — matching \
 exactly one of these shapes:
@@ -24,11 +30,16 @@ Match against today's task list by content. Only include ids you are confident a
 3. User asks what's left / how they're doing:
 {"intent": "status_query"}
 
-4. Genuinely ambiguous AND you haven't already asked a similar question in the recent \
+4. User wants one or more tasks permanently deleted/removed from their list:
+{"intent": "delete_tasks", "task_ids": [1, 2]}
+Match against today's task list by content. Only include ids you are confident about. \
+This is a real, permanent deletion — not the daily completion reset.
+
+5. Genuinely ambiguous AND you haven't already asked a similar question in the recent \
 history:
 {"intent": "clarify", "question": "..."}
 
-5. Anything else (prioritizing tasks, small talk, questions, encouragement):
+6. Anything else (prioritizing tasks, small talk, questions, encouragement):
 {"intent": "chat", "reply": "..."}
 
 Never invent task ids that aren't in the provided list.
@@ -108,6 +119,24 @@ def classify_message(user_message, today_tasks, history=None):
         if matched_ids:
             return {
                 'intent': 'complete_tasks',
+                'task_ids': matched_ids
+            }
+
+    # 2b. Delete task
+    delete_match = re.search(r'(?:delete|remove|get\s+rid\s+of)\s+(?:the\s+)?(?:task\s+)?(.+)', msg_lower)
+    if delete_match:
+        target = delete_match.group(1).strip()
+        target = re.sub(r'[.!?]+$', '', target)
+        matched_ids = []
+        for t in today_tasks:
+            if target == str(t['id']) or f"task {t['id']}" in target:
+                matched_ids.append(t['id'])
+                break
+            if target in t['content'].lower() or t['content'].lower() in target:
+                matched_ids.append(t['id'])
+        if matched_ids:
+            return {
+                'intent': 'delete_tasks',
                 'task_ids': matched_ids
             }
 

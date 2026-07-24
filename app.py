@@ -469,6 +469,22 @@ def chat():
         reply = (f"Marked {len(completed_ids)} task(s) done — nice work."
                  if completed_ids else "I couldn't match that to any of today's tasks.")
 
+    elif intent == 'delete_tasks':
+        deleted = []
+        for tid in result.get('task_ids', []):
+            task = Task.query.filter_by(id=tid, user_id=current_user.id).first()
+            if task:
+                deleted.append({'content': task.content, 'priority': task.priority})
+                db.session.delete(task)  # cascades to streak
+
+        action = ChatAction(user_id=current_user.id, action_type='delete_tasks',
+                             payload=json.dumps({'deleted': deleted}))
+        db.session.add(action)
+        db.session.commit()
+        action_id = action.id if deleted else None
+        reply = (f"Deleted {len(deleted)} task(s): {', '.join(d['content'] for d in deleted)}."
+                 if deleted else "I couldn't match that to any of today's tasks.")
+
     elif intent == 'status_query':
         pending = [t for t in today_tasks if not t.completed]
         if pending:
@@ -510,6 +526,15 @@ def undo_chat_action(action_id):
         ).all()
         for t in tasks:
             db.session.delete(t)  # cascades to streak
+
+    elif action.action_type == 'delete_tasks':
+        for d in payload.get('deleted', []):
+            task = Task(user_id=current_user.id, content=d['content'], priority=d.get('priority', 'medium'))
+            db.session.add(task)
+            db.session.flush()
+            db.session.add(Streak(task_id=task.id))
+            # Note: original streak history is not recoverable — this restores
+            # the task itself, not its past current/longest streak counts.
 
     action.undone = True
     db.session.commit()
