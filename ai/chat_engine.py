@@ -178,7 +178,7 @@ def classify_message(user_message, today_tasks, history=None):
     if os.environ.get('GEMINI_API_KEY'):
         try:
             client = get_client()
-            model = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest')
+            model = os.environ.get('GEMINI_MODEL', 'gemini-3.5-flash-lite')
 
             if today_tasks:
                 task_lines = "\n".join(
@@ -219,6 +219,8 @@ def classify_message(user_message, today_tasks, history=None):
                 return {'intent': 'chat', 'reply': "Could you rephrase that? I didn't quite catch it."}
         except Exception as e:
             print(f"[ChatEngine] Gemini error: {type(e).__name__}: {e}")
+            if '429' in str(e):
+                return {'intent': 'chat', 'reply': "I'm getting a lot of requests right now — give me a few seconds and try again."}
             return {'intent': 'chat', 'reply': "I'm having a little trouble connecting to my server right now. Could we try again in a bit?"}
     else:
         # Fallback explanation if API key is not configured and no rule matches
